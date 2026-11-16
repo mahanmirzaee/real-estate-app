@@ -1,5 +1,7 @@
 // این فایل درِ ورودی برنامه است؛ وقتی برنامه را روشن می‌کنیم، از اینجا شروع می‌شود.
+// اول فایل `.env` را می‌خوانیم تا آدرس دیتابیس در محیط برنامه باشد.
 
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';

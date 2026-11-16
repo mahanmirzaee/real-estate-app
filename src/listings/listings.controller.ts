@@ -25,8 +25,8 @@ export class ListingsController {
   @ApiParam({ name: 'token', description: 'شناسه‌ی آگهی', example: 'ga3T0wlp' })
   @ApiResponse({ status: 200, description: 'آگهی پیدا شد' })
   @ApiResponse({ status: 404, description: 'آگهی با این شناسه پیدا نشد' })
-  findOne(@Param('token') token: string) {
-    const listing = this.listingsService.findOne(token);
+  async findOne(@Param('token') token: string) {
+    const listing = await this.listingsService.findOne(token);
     if (!listing) {
       throw new NotFoundException(`آگهی با شناسه‌ی ${token} پیدا نشد`);
     }

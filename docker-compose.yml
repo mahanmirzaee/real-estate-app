@@ -1,0 +1,19 @@
+# دیتابیس محلی پروژه‌ی املاک: `PostgreSQL` (پستگرس‌کیوال) ۱۶
+# با این فایل، دیتابیس روی همین کامپیوتر بالا می‌آید؛
+# روی لپ‌تاپ هم همین دستورها کار می‌کند.
+services:
+  db:
+    image: postgres:16
+    container_name: realestate-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: realestate
+    ports:
+      - "5432:5432"
+    volumes:
+      - realestate-data:/var/lib/postgresql/data
+
+volumes:
+  realestate-data:

@@ -39,13 +39,13 @@ export class ListingsService {
         fetchedAt: new Date().toISOString(),
       });
     }
-    const saved = this.repository.upsert(fresh);
+    const saved = await this.repository.upsert(fresh);
     return { fetched: rawPosts.length, added: saved.added, skippedAgency, total: saved.total };
   }
 
   // آگهی‌های ذخیره‌شده را برمی‌گرداند؛ اگر محله داده شود، فقط همان محله را می‌دهد.
-  findAll(district?: string): Listing[] {
-    const all = this.repository.findAll();
+  async findAll(district?: string): Promise<Listing[]> {
+    const all = await this.repository.findAll();
     if (!district) {
       return all;
     }
@@ -53,7 +53,7 @@ export class ListingsService {
   }
 
   // یک آگهی را با شناسه‌اش برمی‌گرداند.
-  findOne(token: string): Listing | undefined {
+  async findOne(token: string): Promise<Listing | undefined> {
     return this.repository.findByToken(token);
   }
 

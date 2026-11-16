@@ -1,4 +1,7 @@
 // این فایل تلفن‌چی بنگاه را روشن می‌کند: سرور `MCP` (ام‌سی‌پی).
+// اول فایل `.env` را می‌خوانیم تا آدرس دیتابیس در محیط برنامه باشد.
+
+import 'dotenv/config';
 // `MCP` یعنی «پروتکل متن مدل» (`Model Context Protocol` — مدل کانتکست پروتکل)؛
 // راهی است که هوش مصنوعی با آن می‌تواند ابزارهای برنامه‌ی ما را صدا بزند.
 // مهم‌ترین نکته: این سرور هیچ منطقی از خودش ندارد؛ فقط همان سرویس‌هایی را صدا می‌زند
@@ -36,7 +39,7 @@ async function main(): Promise<void> {
       limit: z.number().optional().describe('حداکثر چند آگهی برگردد؛ پیش‌فرض ۲۰ تا'),
     },
     async ({ district, limit }) => {
-      const all = listingsService.findAll(district);
+      const all = await listingsService.findAll(district);
       const chosen = all.slice(0, limit ?? 20);
       const text =
         chosen.length === 0
@@ -73,7 +76,7 @@ async function main(): Promise<void> {
       token: z.string().describe('شناسه‌ی آگهی در دیوار؛ مثل AXvPb7p1'),
     },
     async ({ token }) => {
-      const listing = listingsService.findOne(token);
+      const listing = await listingsService.findOne(token);
       const text = listing
         ? JSON.stringify(listing, null, 2)
         : `آگهی با شناسه‌ی ${token} پیدا نشد.`;
