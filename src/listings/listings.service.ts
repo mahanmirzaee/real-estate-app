@@ -1,28 +1,34 @@
 // این فایل میز دوم بنگاه است: آگهی‌های خام را می‌گیرد، آگهی آژانس را کنار می‌گذارد
-// و فقط فایل‌های شخصی را نگه می‌دارد. این فایل هیچ‌چیز از دیوار نمی‌داند؛
+// و فقط فایل‌های شخصی را نگه می‌دارد. این فایل هیچ‌چیز از دیوار یا شیپور نمی‌داند؛
 // فقط آگهی آماده را از میز اول تحویل می‌گیرد.
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { AGENCY_WORDS, BLACKLIST_PHRASES } from '../common/constants';
 import { FetchService } from '../fetch/fetch.service';
 import { Listing, RawPost } from '../fetch/listing.interface';
+import { RedisService } from '../redis/redis.service';
 import { ListingsRepository } from './listings.repository';
 
 @Injectable()
 export class ListingsService {
+  private readonly logger = new Logger(ListingsService.name);
+
   constructor(
     private readonly fetchService: FetchService,
     private readonly repository: ListingsRepository,
+    private readonly redis: RedisService,
   ) {}
 
-  // یک دور تازه از دیوار می‌گیرد، فیلتر می‌کند و تازه‌ها را ذخیره می‌کند.
+  // یک دور تازه از همه‌ی منبع‌ها می‌گیرد، فیلتر می‌کند و تازه‌ها را ذخیره می‌کند؛
+  // بعد هم لیست‌های روی تخته‌ی ردیس را پاک می‌کند تا دفعه‌ی بعد تازه خوانده شوند.
   async refresh(): Promise<{ fetched: number; added: number; skippedAgency: number; total: number }> {
     const rawPosts = await this.fetchService.fetchAll();
     let skippedAgency = 0;
     const fresh: Listing[] = [];
     for (const post of rawPosts) {
-      // اگر آگهی مال آژانس بود یا جمله‌ی ممنوعه داشت، کنارش می‌گذاریم.
-      if (!this.isPersonal(post) || this.isBlacklisted(post)) {
+      // اگر سایت خودش گفته باشد آگهی مال آژانس است، یا متن آگهی کلمه‌ی آژانس داشته باشد،
+      // یا جمله‌ی ممنوعه‌ی ماهان را داشته باشد، کنارش می‌گذاریم.
+      if (post.isAgency === true || !this.isPersonal(post) || this.isBlacklisted(post)) {
         skippedAgency++;
         continue;
       }
@@ -33,23 +39,31 @@ export class ListingsService {
         district: post.district,
         category: post.category,
         categoryLabel: post.categoryLabel,
-        url: `https://divar.ir/v/${post.token}`,
+        url: post.url,
         isPersonal: true,
-        source: 'divar',
+        source: post.source,
         fetchedAt: new Date().toISOString(),
       });
     }
     const saved = await this.repository.upsert(fresh);
+    // حافظه‌ی موقت را پاک می‌کنیم تا لیست بعدی از دیتابیس تازه خوانده شود.
+    await this.redis.delByPrefix('listings:');
     return { fetched: rawPosts.length, added: saved.added, skippedAgency, total: saved.total };
   }
 
   // آگهی‌های ذخیره‌شده را برمی‌گرداند؛ اگر محله داده شود، فقط همان محله را می‌دهد.
+  // جواب ۶۰ ثانیه روی تخته‌ی ردیس می‌ماند؛ اگر ردیس خواب بود، از دیتابیس می‌خوانیم.
   async findAll(district?: string): Promise<Listing[]> {
-    const all = await this.repository.findAll();
-    if (!district) {
-      return all;
+    const key = district ? `listings:district:${district}` : 'listings:all';
+    const cached = await this.redis.get(key);
+    if (cached) {
+      this.logger.log(`لیست آگهی‌ها از حافظه‌ی ردیس آمد (کلید ${key}).`);
+      return JSON.parse(cached) as Listing[];
     }
-    return all.filter((listing) => listing.district.includes(district));
+    const all = await this.repository.findAll();
+    const result = district ? all.filter((listing) => listing.district.includes(district)) : all;
+    await this.redis.set(key, JSON.stringify(result), 60);
+    return result;
   }
 
   // یک آگهی را با شناسه‌اش برمی‌گرداند.

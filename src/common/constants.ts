@@ -46,3 +46,31 @@ export const BLACKLIST_PHRASES = [
 // دیوار دوست دارد بداند چه مرورگری درخواست می‌فرستد؛ پس خودمان را مرورگر معرفی می‌کنیم.
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+
+// آدرس اینترنتی‌ای که شیپور برای جست‌وجو دارد؛ همان `API` (ای‌پی‌آی) عمومی‌ای که
+// سایت خودش هم استفاده می‌کند (نسخه‌ی `v10.0.0` — وی‌تن).
+export const SHEYPOOR_API_URL = 'https://www.sheypoor.com/api/v10.0.0';
+
+// سه محله‌ای که ماهان هر روز در آن‌ها فایل‌یابی می‌کند، با شناسه‌ی محله در شیپور.
+// این شناسه‌ها را زنده از آدرس `search/filters/tehran/...` در ۲۶ آبان ۱۴۰۵ گرفتیم:
+// «سید خندان» ۴۷۱۱ است (جلفا محله‌ی جداگانه‌ای در شیپور ندارد و زیر همین است)،
+// «مهران - منطقه ۴» ۴۷۵۷ است، «دبستان» ۱۰۴۶ است.
+export const SHEYPOOR_NEIGHBOURHOOD_IDS = ['4711', '4757', '1046'];
+
+// پنج دسته‌ای که ماهان دنبالشان است، با اسم شیپور؛
+// «زمین و کلنگی» در شیپور «زمین و باغ» (`land` — لند) است.
+export const SHEYPOOR_CATEGORIES = [
+  { value: 'apartment-sell', slug: 'houses-apartments-for-sale', label: 'خرید آپارتمان' },
+  { value: 'office-sell', slug: 'commercial-properties-for-sale', label: 'خرید دفتر کار' },
+  { value: 'plot-old', slug: 'land', label: 'خرید زمین و کلنگی' },
+  { value: 'apartment-rent', slug: 'house-apartment-for-rent', label: 'رهن و اجاره آپارتمان' },
+  { value: 'office-rent', slug: 'commercial-properties-for-rent', label: 'رهن و اجاره دفتر کار' },
+];
+
+// محله‌ای که شیپور در آگهی می‌نویسد -> محله‌ای که ما ذخیره می‌کنیم.
+// آگهی‌ای که محله‌اش اینجا نیست (مثلاً «سراسر ایران» که تبلیغ سراسری است)، کنار گذاشته می‌شود.
+export const SHEYPOOR_DISTRICT_MAP: Record<string, string> = {
+  'سید خندان': 'سید خندان (جلفا)',
+  'مهران - منطقه 4': 'مهران',
+  'دبستان': 'دبستان',
+};

@@ -1,63 +1,32 @@
-// این فایل برای هر پنج دسته می‌رود سراغ دیوار و آگهی‌های خام را جمع می‌کند.
-// مثل پیک بنگاه که برای هر محله یک دور می‌زند و فایل‌ها را برمی‌دارد.
+// این فایل میز اول بنگاه است: از همه‌ی منبع‌های روشن آگهی خام جمع می‌کند.
+// مثل سرپرست پیک‌ها که به هر پیک می‌گوید برو و برگرد، بعد همه‌ی فایل‌ها را یک جا تحویل می‌دهد.
+// اگر یک منبع جواب نداد، بقیه‌ی منبع‌ها باز هم کارشان را می‌کنند و فقط خطا نوشته می‌شود.
 
-import { Injectable } from '@nestjs/common';
-import { CATEGORIES } from '../common/constants';
-import { DivarClient } from './divar.client';
+import { Injectable, Logger } from '@nestjs/common';
 import { RawPost } from './listing.interface';
+import { ListingSourceFactory } from './source-factory';
 
 @Injectable()
 export class FetchService {
-  constructor(private readonly divar: DivarClient) {}
+  private readonly logger = new Logger(FetchService.name);
 
-  // همه‌ی دسته‌ها را می‌گیرد؛ هر دسته حداکثر دو صفحه، تا کار خیلی طول نکشد.
+  constructor(private readonly factory: ListingSourceFactory) {}
+
+  // از همه‌ی منبع‌ها می‌گیرد؛ هر منبع حداکثر دو صفحه، تا کار خیلی طول نکشد.
   async fetchAll(maxPages = 2): Promise<RawPost[]> {
     const all: RawPost[] = [];
-    for (const category of CATEGORIES) {
-      let paginationData: unknown;
-      for (let page = 1; page <= maxPages; page++) {
-        const response = await this.divar.search(category.value, paginationData);
-        for (const post of this.extractPosts(response)) {
-          all.push({ ...post, category: category.value, categoryLabel: category.label });
-        }
-        // اگر دیوار گفت صفحه‌ی بعدی نیست، دیگر ادامه نمی‌دهیم.
-        if (!response.pagination?.has_next_page || !response.pagination?.data) {
-          break;
-        }
-        paginationData = response.pagination.data;
-        // بین صفحه‌ها یک ثانیه صبر می‌کنیم تا به دیوار فشار نیاید.
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+    for (const source of this.factory.getSources()) {
+      try {
+        const posts = await source.fetchAll(maxPages);
+        // تعداد هر منبع را جدا می‌نویسیم تا معلوم باشد از کجا چند تا آمده است.
+        this.logger.log(`از ${source.source} ${posts.length} آگهی خام گرفتیم.`);
+        all.push(...posts);
+      } catch (error) {
+        this.logger.error(
+          `گرفتن آگهی از ${source.source} نشد: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
     return all;
-  }
-
-  // از جواب شلوغ دیوار، فقط آگهی‌هایی را برمی‌داریم که شناسه و تیتر دارند.
-  private extractPosts(response: { list_widgets?: Array<{ data?: Record<string, any> }> }): Omit<RawPost, 'category' | 'categoryLabel'>[] {
-    const posts: Omit<RawPost, 'category' | 'categoryLabel'>[] = [];
-    for (const widget of response.list_widgets ?? []) {
-      const data = widget?.data;
-      if (data?.token && data?.title) {
-        posts.push({
-          token: String(data.token),
-          title: String(data.title),
-          priceText: String(data.middle_description_text ?? ''),
-          bottomText: String(data.bottom_description_text ?? ''),
-          district: this.districtOf(data),
-        });
-      }
-    }
-    return posts;
-  }
-
-  // محله را اول از فیلد آماده‌ی دیوار می‌خوانیم و اگر نبود، از آخر توضیح آگهی درمی‌آوریم.
-  private districtOf(data: Record<string, any>): string {
-    const direct = data.web_info?.district_persian;
-    if (direct) {
-      return String(direct);
-    }
-    const bottom = String(data.bottom_description_text ?? '');
-    const match = /در (.+)$/.exec(bottom);
-    return match ? match[1].trim() : '';
   }
 }

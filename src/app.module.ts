@@ -5,8 +5,9 @@ import { Module } from '@nestjs/common';
 import { ConvertModule } from './convert/convert.module';
 import { FetchModule } from './fetch/fetch.module';
 import { ListingsModule } from './listings/listings.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 
 @Module({
-  imports: [FetchModule, ListingsModule, ConvertModule],
+  imports: [FetchModule, ListingsModule, ConvertModule, SchedulerModule],
 })
 export class AppModule {}

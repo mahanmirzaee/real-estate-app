@@ -3,6 +3,7 @@
 import { Module } from '@nestjs/common';
 import { FetchModule } from '../fetch/fetch.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { RedisModule } from '../redis/redis.module';
 import { ListingsController } from './listings.controller';
 import { PrismaListingsRepository } from './listings.prisma-repository';
 import { ListingsRepository } from './listings.repository';
@@ -10,8 +11,9 @@ import { ListingsService } from './listings.service';
 
 @Module({
   // برای گرفتن آگهی تازه، به میز اول (ماژول گرفتن آگهی) نیاز داریم؛
-  // برای ذخیره کردن هم به ماژول دیتابیس نیاز داریم.
-  imports: [FetchModule, PrismaModule],
+  // برای ذخیره کردن هم به ماژول دیتابیس نیاز داریم؛
+  // برای حافظه‌ی موقت هم به ماژول ردیس نیاز داریم.
+  imports: [FetchModule, PrismaModule, RedisModule],
   controllers: [ListingsController],
   providers: [
     ListingsService,

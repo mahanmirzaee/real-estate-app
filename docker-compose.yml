@@ -15,5 +15,18 @@ services:
     volumes:
       - realestate-data:/var/lib/postgresql/data
 
+  # حافظه‌ی موقت و صف پروژه: `Redis` (ردیس) ۷
+  # لیست آگهی‌ها ۶۰ ثانیه اینجا می‌ماند و کارهای زمان‌بندی‌شده‌ی تازه‌سازی هم در همین صف می‌خوابند.
+  # اگر ردیس خاموش باشد، برنامه نمی‌ایستد؛ فقط همه‌چیز از دیتابیس خوانده می‌شود.
+  redis:
+    image: redis:7-alpine
+    container_name: realestate-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - realestate-redis-data:/data
+
 volumes:
   realestate-data:
+  realestate-redis-data:

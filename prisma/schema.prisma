@@ -29,7 +29,7 @@ model Listing {
   url          String
   // آیا آگهی مال یک شخص است یا آژانس؟ فقط آگهی‌های شخصی ذخیره می‌شوند.
   isPersonal   Boolean
-  // آگهی از کجا آمده است؛ در نسخه‌ی اول فقط 'divar' است.
+  // آگهی از کجا آمده است؛ 'divar' یا 'sheypoor'.
   source       String
   // تاریخی که آگهی را گرفتیم.
   fetchedAt    DateTime

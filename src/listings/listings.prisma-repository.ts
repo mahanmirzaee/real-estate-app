@@ -27,7 +27,7 @@ export class PrismaListingsRepository extends ListingsRepository {
       categoryLabel: row.categoryLabel,
       url: row.url,
       isPersonal: row.isPersonal,
-      source: row.source as 'divar',
+      source: row.source as 'divar' | 'sheypoor',
       fetchedAt: row.fetchedAt.toISOString(),
     };
   }
