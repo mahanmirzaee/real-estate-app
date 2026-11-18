@@ -54,9 +54,19 @@ export class DivarSource implements ListingSource {
         posts.push({
           token: String(data.token),
           title: String(data.title),
-          priceText: String(data.middle_description_text ?? ''),
+          // قیمت را از دو تکه‌ی دیوار می‌سازیم: بالای آگهی «ودیعه» را می‌گوید
+          // و وسطش «اجاره» یا «رهن کامل» را؛ هر دو را کنار هم می‌گذاریم تا
+          // عدد رهن و اجاره هر دو در متن قیمت باشند و بعداً خوانده شوند.
+          // اگر یکی از دو تکه خالی بود، فقط همان یکی که هست می‌ماند.
+          priceText: [data.top_description_text, data.middle_description_text]
+            .map((part) => String(part ?? '').trim())
+            .filter((part) => part.length > 0)
+            .join('، '),
           bottomText: String(data.bottom_description_text ?? ''),
           district: this.districtOf(data),
+          // عکس آگهی را هم برمی‌داریم؛ دیوار نشانی عکس را در فیلد `image_url` می‌دهد.
+          // اگر آگهی عکس نداشت، این فیلد خالی است و بعداً جای عکس خالی می‌ماند.
+          imageUrl: data.image_url ? String(data.image_url) : undefined,
         });
       }
     }

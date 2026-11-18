@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<!-- صفحه‌ی «موتور جست‌وجوگر ماهان»؛ ویترین بنگاه. -->
+<!-- این صفحه فقط نمایش می‌دهد؛ همه‌ی داده‌ها را از خود برنامه می‌گیرد: -->
+<!-- لیست آگهی‌ها از /listings و اعلان‌های تازه از /notifications. -->
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>موتور جست‌وجوگر ماهان</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="hero">
+    <h1>🔍 موتور جست‌وجوگر ماهان</h1>
+    <p class="subtitle">آگهی‌های شخصی دیوار و شیپور — محله‌های مهران، جلفا و دبستان</p>
+  </header>
+
+  <main>
+    <!-- بخش آگهی‌های تازه؛ از دفتر اعلان‌ها می‌آید و با دکمه‌ی «خوانده شد» خالی می‌شود. -->
+    <section class="panel" id="new-panel">
+      <div class="panel-head">
+        <h2>🆕 آگهی‌های جدید</h2>
+        <button id="read-all" class="btn gold">خوانده شد ✓</button>
+      </div>
+      <p id="new-empty" class="empty">آگهی تازه‌ی خوانده‌نشده‌ای نیست.</p>
+      <div id="new-list" class="cards"></div>
+    </section>
+
+    <!-- بخش جست‌وجو بر اساس بودجه‌ی رهن؛ دو عدد می‌گیرد و آگهی‌هایی را می‌آورد -->
+    <!-- که «معادل رهن کامل» آن‌ها زیر سقف باشد — یعنی رهن + اجاره‌ای که به رهن برگشته است. -->
+    <section class="panel" id="budget-panel">
+      <h2>💰 جست‌وجو بر اساس بودجه</h2>
+      <p class="hint">رهن کامل مورد نظر و حداکثر رهن را بده؛ آگهی‌هایی می‌آیند که معادل رهن کامل آن‌ها زیر سقف باشد. هر ترکیبی که به هدف برسد پیدا می‌شود؛ مثلاً رهن ۱ میلیارد + اجاره‌ی ۳۰ میلیون، معادل رهن کامل ۲ میلیارد است.</p>
+      <div class="budget-form">
+        <label>
+          رهن کامل مورد نظر (تومان)
+          <input id="budget-target" type="number" value="2000000000" min="1" step="1000000">
+        </label>
+        <label>
+          حداکثر رهن (تومان)
+          <input id="budget-max" type="number" value="2500000000" min="1" step="1000000">
+        </label>
+        <button id="budget-search" class="btn gold">🔍 جست‌وجو</button>
+      </div>
+      <p id="budget-status" class="status"></p>
+      <div id="budget-list" class="cards"></div>
+    </section>
+
+    <!-- نوار فیلتر؛ اینجا جای همه‌ی فیلترهاست. -->
+    <!-- فعلاً فقط منبع (همه، دیوار، شیپور) اینجاست؛ -->
+    <!-- در قدم بعد، همین‌جا دکمه‌های محله و کلید «رهن/خرید» هم اضافه می‌شوند. -->
+    <section class="panel">
+      <div class="toolbar filter-bar" id="filter-bar">
+        <div class="filters" id="filters">
+          <button data-source="all" class="filter-btn active">همه</button>
+          <button data-source="divar" class="filter-btn">دیوار</button>
+          <button data-source="sheypoor" class="filter-btn">شیپور</button>
+        </div>
+        <button id="refresh" class="btn gold">🔄 تازه‌سازی</button>
+      </div>
+      <p id="status" class="status"></p>
+      <p id="count" class="count"></p>
+      <div id="list" class="cards"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>داده‌ها از دیوار و شیپور می‌آیند؛ برای تست آدرس‌ها، صفحه‌ی <a href="/api">سواگر</a> را ببین.</p>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

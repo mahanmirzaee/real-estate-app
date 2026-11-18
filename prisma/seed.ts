@@ -39,6 +39,7 @@ async function main(): Promise<void> {
         isPersonal: listing.isPersonal,
         source: listing.source,
         fetchedAt: new Date(listing.fetchedAt),
+        imageUrl: listing.imageUrl ?? null,
       })),
       skipDuplicates: true,
     });

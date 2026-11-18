@@ -1,0 +1,314 @@
+/* ظاهر «موتور جست‌وجوگر ماهان»؛ تم تیره‌ی شیک با طلایی. */
+/* رنگ‌ها: زغال‌سنگ تیره برای پس‌زمینه، طلایی برای دکمه‌ها و برچسب‌ها. */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #141414; /* زغال‌سنگ تیره */
+  color: #f0ead8; /* کرم روشن برای متن */
+  font-family: Tahoma, sans-serif;
+  line-height: 1.8;
+}
+
+a {
+  color: #d4af37; /* طلایی */
+}
+
+/* سربرگ بزرگ بالای صفحه */
+.hero {
+  text-align: center;
+  padding: 36px 16px 24px;
+  background: linear-gradient(180deg, #1f1a10, #141414);
+  border-bottom: 2px solid #d4af37;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 32px;
+  color: #d4af37;
+}
+
+.hero .subtitle {
+  margin: 8px 0 0;
+  color: #c9c2ab;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* قاب هر بخش */
+.panel {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #e8c96a;
+}
+
+/* دکمه‌ی طلایی */
+.btn {
+  cursor: pointer;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 20px;
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.btn.gold {
+  background: #d4af37;
+  color: #1a1a1a;
+  font-weight: bold;
+}
+
+.btn.gold:hover {
+  background: #e8c96a;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* نوار دکمه‌های فیلتر و تازه‌سازی */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-btn {
+  cursor: pointer;
+  background: #2a2a2a;
+  color: #f0ead8;
+  border: 1px solid #555;
+  border-radius: 999px;
+  padding: 8px 20px;
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.filter-btn:hover {
+  border-color: #d4af37;
+}
+
+/* فرم جست‌وجوی بودجه؛ دو ورودی عدد و دکمه‌ی جست‌وجو */
+.budget-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.budget-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: #c9c2ab;
+}
+
+.budget-form input {
+  background: #2a2a2a;
+  color: #f0ead8;
+  border: 1px solid #555;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 15px;
+  direction: ltr;
+  text-align: right;
+  width: 220px;
+}
+
+.budget-form input:focus {
+  outline: none;
+  border-color: #d4af37;
+}
+
+.hint {
+  color: #9a937c;
+  font-size: 14px;
+  margin: 8px 0 0;
+}
+
+/* خط معادل رهن کامل روی کارت نتیجه‌ی بودجه */
+.card-equivalent {
+  margin: 0 0 2px;
+  color: #e8c96a;
+  font-weight: bold;
+}
+
+.card-original {
+  margin: 0 0 4px;
+  color: #c9c2ab;
+  font-size: 14px;
+}
+
+/* دکمه‌ی فیلترِ انتخاب‌شده طلایی می‌شود */
+.filter-btn.active {
+  background: #d4af37;
+  color: #1a1a1a;
+  border-color: #d4af37;
+  font-weight: bold;
+}
+
+.status,
+.count {
+  color: #c9c2ab;
+  margin: 10px 0 0;
+}
+
+.empty {
+  color: #9a937c;
+  margin: 12px 0 0;
+}
+
+/* لیست کارت‌ها؛ هر کارت یک ردیف است */
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* کارت آگهی: عکس کنار، متن کنارش */
+.card {
+  display: flex;
+  gap: 16px;
+  background: #262626;
+  border: 1px solid #3a3a3a;
+  border-radius: 14px;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.card:hover {
+  border-color: #d4af37;
+}
+
+/* عکس آگهی؛ کنار کارت */
+.card-photo {
+  flex-shrink: 0;
+  width: 150px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #333;
+}
+
+/* اگر آگهی عکس نداشت، به‌جای عکس یک قاب طلایی با خانه می‌گذاریم؛ هیچ‌وقت عکس خراب نشان نمی‌دهیم */
+.card-photo-placeholder {
+  flex-shrink: 0;
+  width: 150px;
+  height: 110px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44px;
+  background: linear-gradient(135deg, #3a2f10, #d4af37);
+}
+
+.card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-body h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  color: #fdf6dd;
+}
+
+.card-price {
+  margin: 0 0 4px;
+  color: #e8c96a;
+  font-weight: bold;
+}
+
+.card-meta {
+  margin: 0 0 8px;
+  color: #c9c2ab;
+  font-size: 14px;
+}
+
+/* برچسب‌ها: منبع آگهی و «جدید» */
+.badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 13px;
+  background: #333;
+  color: #f0ead8;
+}
+
+.badge.source {
+  background: #3a2f10;
+  color: #e8c96a;
+  border: 1px solid #d4af37;
+}
+
+.badge.new {
+  background: #d4af37;
+  color: #1a1a1a;
+  font-weight: bold;
+}
+
+.card-link {
+  font-size: 14px;
+}
+
+footer {
+  text-align: center;
+  color: #9a937c;
+  padding: 8px 16px 32px;
+  font-size: 14px;
+}
+
+/* روی موبایل، کارت عمودی می‌شود؛ عکس بالا، متن پایین */
+@media (max-width: 600px) {
+  .card {
+    flex-direction: column;
+  }
+
+  .card-photo,
+  .card-photo-placeholder {
+    width: 100%;
+    height: 170px;
+  }
+}

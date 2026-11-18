@@ -28,6 +28,8 @@ export interface SheypoorCardAttributes {
   timePassedLabel?: string;
   price?: Array<{ label?: string | null; amount?: string | number | null }>;
   categories?: Array<{ name?: string }>;
+  // عکس‌های آگهی؛ `thumbnails.round` (تامبنیلز راوند) همان عکس کوچک کارت است.
+  images?: { thumbnails?: { round?: string; landscape?: string } };
 }
 
 export interface SheypoorCard {

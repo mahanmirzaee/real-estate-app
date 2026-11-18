@@ -29,6 +29,9 @@ export class PrismaListingsRepository extends ListingsRepository {
       isPersonal: row.isPersonal,
       source: row.source as 'divar' | 'sheypoor',
       fetchedAt: row.fetchedAt.toISOString(),
+      imageUrl: row.imageUrl ?? null,
+      rahnAmount: row.rahnAmount ?? null,
+      ejareAmount: row.ejareAmount ?? null,
     };
   }
 
@@ -65,6 +68,9 @@ export class PrismaListingsRepository extends ListingsRepository {
           isPersonal: listing.isPersonal,
           source: listing.source,
           fetchedAt: new Date(listing.fetchedAt),
+          imageUrl: listing.imageUrl ?? null,
+          rahnAmount: listing.rahnAmount ?? null,
+          ejareAmount: listing.ejareAmount ?? null,
         })),
       }),
     ]);
@@ -72,21 +78,93 @@ export class PrismaListingsRepository extends ListingsRepository {
 
   // آگهی‌های تازه را به انبار اضافه می‌کند، ولی تکراری‌ها را دوباره ذخیره نمی‌کند؛
   // دیتابیس خودش با `skipDuplicates` (اسکیپ دوپلیکیتس) تکراری‌ها را رد می‌کند.
+  // برای هر آگهی واقعاً تازه، یک رویداد «آگهی تازه آمد» هم در دفتر `Outbox` (اوت‌باکس)
+  // نوشته می‌شود — در همان تراکنش، کنار خود آگهی؛ یعنی یا هر دو با هم نوشته می‌شوند
+  // یا هیچ‌کدام. اگر وسط کار برنامه خاموش شود، هیچ آگهی‌ای بدون رویداد نمی‌ماند
+  // و هیچ رویدادی هم برای آگهی‌ای که ذخیره نشده، ساخته نمی‌شود.
   async upsert(incoming: Listing[]): Promise<{ added: number; total: number }> {
-    const created = await this.prisma.listing.createMany({
-      data: incoming.map((listing) => ({
-        token: listing.token,
-        title: listing.title,
-        priceText: listing.priceText,
-        district: listing.district,
-        category: listing.category,
-        categoryLabel: listing.categoryLabel,
-        url: listing.url,
-        isPersonal: listing.isPersonal,
-        source: listing.source,
-        fetchedAt: new Date(listing.fetchedAt),
-      })),
-      skipDuplicates: true,
+    if (incoming.length === 0) {
+      const total = await this.prisma.listing.count();
+      return { added: 0, total };
+    }
+    // اول می‌پرسیم کدام شناسه‌ها از قبل در انبار هستند؛
+    // فقط آگهی‌هایی که از قبل نیستند، «تازه» حساب می‌شوند و رویداد می‌گیرند.
+    const existing = await this.prisma.listing.findMany({
+      where: { token: { in: incoming.map((listing) => listing.token) } },
+      select: { token: true },
+    });
+    const existingTokens = new Set(existing.map((row) => row.token));
+    const fresh = incoming.filter((listing) => !existingTokens.has(listing.token));
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      // آگهی‌های تازه را می‌نویسیم؛ تکراری‌ها را دیتابیس خودش رد می‌کند.
+      const result = await tx.listing.createMany({
+        data: incoming.map((listing) => ({
+          token: listing.token,
+          title: listing.title,
+          priceText: listing.priceText,
+          district: listing.district,
+          category: listing.category,
+          categoryLabel: listing.categoryLabel,
+          url: listing.url,
+          isPersonal: listing.isPersonal,
+          source: listing.source,
+          fetchedAt: new Date(listing.fetchedAt),
+          imageUrl: listing.imageUrl ?? null,
+          rahnAmount: listing.rahnAmount ?? null,
+          ejareAmount: listing.ejareAmount ?? null,
+        })),
+        skipDuplicates: true,
+      });
+      // آگهی‌هایی که از قبل بودند ولی عکس نداشتند، حالا که دوباره دیده شدند،
+      // عکسشان را می‌گیرند تا لیست قدیمی هم کم‌کم عکس‌دار شود.
+      for (const listing of incoming) {
+        if (listing.imageUrl) {
+          await tx.listing.updateMany({
+            where: { token: listing.token, imageUrl: null },
+            data: { imageUrl: listing.imageUrl },
+          });
+        }
+      }
+      // آگهی‌هایی که از قبل بودند ولی عدد رهن/اجاره ندارند (چون وقتی ذخیره شدند
+      // هنوز قیمت خوانده نمی‌شد)، حالا که دوباره دیده شدند و قیمت تازه‌شان کامل است،
+      // متن قیمت تازه‌شان را می‌گیرند و عددهایش را هم؛ تا جست‌وجوی بودجه آن‌ها را هم پیدا کند.
+      // فقط وقتی قیمت تازه کامل است (هر دو عدد دارد) چیزی عوض می‌شود؛
+      // عدد ناقص، جای عددی که از قبل هست را نمی‌گیرد.
+      for (const listing of incoming) {
+        if (listing.rahnAmount !== null && listing.rahnAmount !== undefined
+          && listing.ejareAmount !== null && listing.ejareAmount !== undefined) {
+          await tx.listing.updateMany({
+            where: { token: listing.token, OR: [{ rahnAmount: null }, { ejareAmount: null }] },
+            data: {
+              priceText: listing.priceText,
+              rahnAmount: listing.rahnAmount,
+              ejareAmount: listing.ejareAmount,
+            },
+          });
+        }
+      }
+      // برای هر آگهی تازه، یک رویداد در دفتر اوت‌باکس می‌نویسیم؛
+      // خود آگهی کامل، داخل رویداد هم هست تا خواننده لازم نباشد دوباره بپرسد.
+      await tx.outboxEvent.createMany({
+        data: fresh.map((listing) => ({
+          eventType: 'listing.created',
+          payload: {
+            token: listing.token,
+            title: listing.title,
+            priceText: listing.priceText,
+            district: listing.district,
+            category: listing.category,
+            categoryLabel: listing.categoryLabel,
+            url: listing.url,
+            isPersonal: listing.isPersonal,
+            source: listing.source,
+            fetchedAt: listing.fetchedAt,
+            imageUrl: listing.imageUrl ?? null,
+          },
+        })),
+      });
+      return result;
     });
     const total = await this.prisma.listing.count();
     return { added: created.count, total };

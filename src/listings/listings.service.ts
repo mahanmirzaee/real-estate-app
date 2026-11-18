@@ -4,10 +4,18 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { AGENCY_WORDS, BLACKLIST_PHRASES } from '../common/constants';
+import { RAHN_TO_EJARE_RATIO } from '../convert/convert.service';
 import { FetchService } from '../fetch/fetch.service';
 import { Listing, RawPost } from '../fetch/listing.interface';
 import { RedisService } from '../redis/redis.service';
 import { ListingsRepository } from './listings.repository';
+import { parsePrice } from './price-parser';
+
+// یک آگهی به‌علاوه‌ی «معادل رهن کامل» آن؛ یعنی رهن + اجاره‌ای که با نسبت ۳٪ به رهن برگشته است.
+export interface BudgetListing extends Listing {
+  // معادل رهن کامل به تومان؛ مثلاً رهن ۱ میلیارد + اجاره‌ی ۳۰ میلیون می‌شود ۲ میلیارد.
+  equivalentRahn: number;
+}
 
 @Injectable()
 export class ListingsService {
@@ -32,6 +40,9 @@ export class ListingsService {
         skippedAgency++;
         continue;
       }
+      // عدد رهن و اجاره را همان‌جا که آگهی تمیز می‌شود، از متن قیمت درمی‌آوریم؛
+      // اگر قیمت خوانده نشد، هر دو خالی می‌مانند و آگهی از جست‌وجوی بودجه کنار می‌ماند.
+      const parsed = parsePrice(post.priceText, post.category);
       fresh.push({
         token: post.token,
         title: post.title,
@@ -43,6 +54,10 @@ export class ListingsService {
         isPersonal: true,
         source: post.source,
         fetchedAt: new Date().toISOString(),
+        // عکس را هم با خودش می‌بریم؛ اگر عکس نبود، خالی می‌ماند.
+        imageUrl: post.imageUrl ? post.imageUrl : null,
+        rahnAmount: parsed.rahnAmount,
+        ejareAmount: parsed.ejareAmount,
       });
     }
     const saved = await this.repository.upsert(fresh);
@@ -69,6 +84,39 @@ export class ListingsService {
   // یک آگهی را با شناسه‌اش برمی‌گرداند.
   async findOne(token: string): Promise<Listing | undefined> {
     return this.repository.findByToken(token);
+  }
+
+  // آگهی‌های شخصی که «معادل رهن کامل» آن‌ها زیر سقف است؛ نزدیک‌ترین به هدف اول.
+  // معادل رهن کامل یعنی رهن + اجاره‌ای که با همان نسبت ۳٪ ماشین‌حساب به رهن برگشته است؛
+  // پس هر ترکیبی که به هدف برسد پیدا می‌شود، نه فقط آگهی‌هایی که خود رهنشان برابر هدف است:
+  // رهن ۱٫۵ میلیارد + اجاره‌ی ۱۵ میلیون، رهن ۵۰۰ میلیون + اجاره‌ی ۴۵ میلیون،
+  // رهن ۲ میلیارد بدون اجاره، و حتی رهن صفر + اجاره‌ی ۶۰ میلیون — همه معادل ۲ میلیاردند.
+  // فقط آگهی‌هایی می‌آیند که هر دو عددشان خوانده شده باشد؛ اگر رهن یا اجاره معلوم نباشد،
+  // معادلش حدس زده نمی‌شود و آگهی کنار می‌ماند. هیچ‌چیز بالای سقف نمی‌آید.
+  async findByBudget(target: number, max: number): Promise<BudgetListing[]> {
+    const all = await this.repository.findAll();
+    const results: BudgetListing[] = [];
+    for (const listing of all) {
+      if (listing.rahnAmount === null || listing.rahnAmount === undefined) {
+        continue;
+      }
+      if (listing.ejareAmount === null || listing.ejareAmount === undefined) {
+        continue;
+      }
+      // اجاره را با همان نسبت ۳٪ به رهن برمی‌گردانیم؛ عدد را گرد می‌کنیم تا خرده‌ی اعشاری نماند.
+      const equivalentRahn = Math.round(
+        listing.rahnAmount + listing.ejareAmount / RAHN_TO_EJARE_RATIO,
+      );
+      if (equivalentRahn <= 0 || equivalentRahn > max) {
+        continue;
+      }
+      results.push({ ...listing, equivalentRahn });
+    }
+    // نزدیک‌ترین به هدف اول؛ یعنی آگهی‌ای که معادلش به هدف نزدیک‌تر است، بالاتر می‌آید.
+    results.sort(
+      (a, b) => Math.abs(a.equivalentRahn - target) - Math.abs(b.equivalentRahn - target),
+    );
+    return results;
   }
 
   // آگهی شخصی یعنی: در توضیحش اسم محله آمده باشد («در مهران») و کلمه‌ی آژانس نداشته باشد.
