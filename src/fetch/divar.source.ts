@@ -3,10 +3,10 @@
 // این فایل فقط با سایت دیوار حرف می‌زند؛ مثل پیک بنگاه که می‌رود و برمی‌گردد.
 
 import { Injectable, Logger } from '@nestjs/common';
-import { AGENCY_WORDS, BLACKLIST_PHRASES, CATEGORIES } from '../common/constants';
+import { AGENCY_WORDS, BLACKLIST_PHRASES, CATEGORIES, DISTRICT_IDS } from '../common/constants';
 import { DivarClient } from './divar.client';
 import { RawPost } from './listing.interface';
-import { ListingSource } from './listing-source.interface';
+import { FetchScope, ListingSource } from './listing-source.interface';
 
 @Injectable()
 export class DivarSource implements ListingSource {
@@ -16,12 +16,14 @@ export class DivarSource implements ListingSource {
   constructor(private readonly divar: DivarClient) {}
 
   // همه‌ی دسته‌ها را می‌گیرد؛ هر دسته حداکثر دو صفحه، تا کار خیلی طول نکشد.
-  async fetchAll(maxPages = 2): Promise<RawPost[]> {
+  // محله‌ها از بیرون می‌آیند (از تنظیمات)؛ اگر داده نشد، همان سه محله‌ی دفترچه‌ی ثابت.
+  async fetchAll(maxPages = 2, scope?: FetchScope): Promise<RawPost[]> {
     const all: RawPost[] = [];
+    const districtIds = scope?.divarDistrictIds ?? DISTRICT_IDS;
     for (const category of CATEGORIES) {
       let paginationData: unknown;
       for (let page = 1; page <= maxPages; page++) {
-        const response = await this.divar.search(category.value, paginationData);
+        const response = await this.divar.search(category.value, paginationData, districtIds);
         for (const post of this.extractPosts(response)) {
           all.push({
             ...post,
@@ -41,21 +43,25 @@ export class DivarSource implements ListingSource {
       }
     }
     // برای آگهی‌هایی که با قانون‌های متنی شخصی به نظر می‌رسند،
-    // صفحه‌ی خود آگهی را هم می‌گیریم تا متن کاملش را داشته باشیم؛
-    // امکانات (پارکینگ، انباری، آسانسور) فقط از روی متن کامل معلوم می‌شود.
+    // صفحه‌ی خود آگهی را هم می‌گیریم تا متن کامل و عکس‌هایش را داشته باشیم؛
+    // امکانات (پارکینگ، انباری، آسانسور) فقط از روی متن کامل معلوم می‌شود
+    // و گالری عکس هم فقط در صفحه‌ی آگهی است.
     // آگهی آژانس را نمی‌گیریم چون دور انداخته می‌شود و گرفتن صفحه‌اش وقت تلف کردن است.
-    await this.attachDescriptions(all);
+    await this.attachDetails(all);
     return all;
   }
 
   // صفحه‌ی آگهی‌ها را سه تا سه تا می‌گیریم؛ اگر یکی نشد، آگهی را با همان اطلاعات لیست نگه می‌داریم.
-  private async attachDescriptions(posts: RawPost[]): Promise<void> {
+  private async attachDetails(posts: RawPost[]): Promise<void> {
     const candidates = posts.filter((post) => this.looksPersonal(post));
     let index = 0;
     const workers = Array.from({ length: 3 }, async () => {
       while (index < candidates.length) {
         const post = candidates[index++];
-        post.description = await this.divar.getPostDescription(post.token);
+        const detail = await this.divar.getPostDetail(post.token);
+        post.description = detail.description || undefined;
+        // عکس‌های گالری؛ اگر صفحه عکسی نداشت، همان عکس تکی لیست می‌ماند.
+        post.imageUrls = detail.imageUrls.length > 0 ? detail.imageUrls : undefined;
       }
     });
     await Promise.all(workers);

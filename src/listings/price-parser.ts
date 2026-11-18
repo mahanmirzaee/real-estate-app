@@ -4,18 +4,23 @@
 // قانون طلایی: اگر چیزی خوانده نشد، حدس نمی‌زنیم — خالی برمی‌گردانیم و آگهی
 // از جست‌وجوی بودجه کنار می‌ماند. عدد اشتباه، بدتر از نداشتن عدد است.
 
-// نتیجه‌ی خواندن یک قیمت؛ هر دو عدد به تومان‌اند و اگر خوانده نشوند، خالی‌اند.
+// نتیجه‌ی خواندن یک قیمت؛ هر سه عدد به تومان‌اند و اگر خوانده نشوند، خالی‌اند.
 export interface ParsedPrice {
   // رهن (ودیعه)؛ برای «رهن کامل» هم همین عدد ودیعه است.
   rahnAmount: number | null;
   // اجاره‌ی ماهانه؛ برای «رهن کامل» صفر است (یعنی واقعاً اجاره ندارد)، نه خالی.
   ejareAmount: number | null;
+  // قیمت فروش (قیمت کل)؛ فقط برای دسته‌های خرید پر می‌شود.
+  // برای اجاره خالی است؛ آنجا رهن و اجاره را داریم.
+  saleAmount: number | null;
 }
 
 // ارقام فارسی (۰-۹) و عربی (٠-٩) را به لاتین (0-9) برمی‌گرداند؛
 // جداکننده‌ی اعشار فارسی (٫) را به نقطه تبدیل می‌کند؛
 // جداکننده‌های هزارگان (، و ٬) را برمی‌دارد تا عدد یک‌تکه شود.
-function normalizeDigits(text: string): string {
+// جاهای دیگر برنامه هم همین کار را می‌خواهند (مثلاً خواندن جمله‌ی مشتری)،
+// پس این تابع بیرون داده شده تا همه از یکی استفاده کنند.
+export function normalizePersianDigits(text: string): string {
   const persian = '۰۱۲۳۴۵۶۷۸۹';
   const arabic = '٠١٢٣٤٥٦٧٨٩';
   let out = '';
@@ -35,6 +40,13 @@ function normalizeDigits(text: string): string {
   return out
     .replace(/٫/g, '.')
     .replace(/[,٬]/g, '');
+}
+
+// ارقام فارسی (۰-۹) و عربی (٠-٩) را به لاتین (0-9) برمی‌گرداند؛
+// جداکننده‌ی اعشار فارسی (٫) را به نقطه تبدیل می‌کند؛
+// جداکننده‌های هزارگان (، و ٬) را برمی‌دارد تا عدد یک‌تکه شود.
+function normalizeDigits(text: string): string {
+  return normalizePersianDigits(text);
 }
 
 // از یک تکه متن، عدد را درمی‌آورد؛ مثل «۴۰۰,۰۰۰,۰۰۰ تومان» می‌شود 400000000،
@@ -81,14 +93,41 @@ function findAmount(text: string, labels: string[]): number | null {
   return null;
 }
 
+// قیمت فروش (قیمت کل) را می‌خواند؛ مثل «قیمت کل: ۱۱٬۰۰۰٬۰۰۰٬۰۰۰ تومان».
+// اول «قیمت کل» را می‌پرسیم؛ اگر نبود، «قیمت» ساده را.
+// «قیمت هر متر» قیمت کل نیست و رد می‌شود — آن عدد متری است، نه قیمت خانه.
+// اگر هیچ برچسبی نبود (مثل قیمت دیوار که فقط «۳۰,۰۰۰,۰۰۰,۰۰۰ تومان» است)،
+// کل متن را یک عدد می‌خوانیم؛ «توافقی» عددی ندارد و خالی برمی‌گردد.
+function findSaleAmount(text: string): number | null {
+  const total = /قیمت کل\s*:?\s*([^،|]+)/.exec(text);
+  if (total) {
+    const amount = readAmount(total[1]);
+    if (amount !== null) {
+      return amount;
+    }
+  }
+  const plain = /قیمت\s*:?\s*([^،|]+)/.exec(text);
+  if (plain && !plain[1].includes('هر متر')) {
+    const amount = readAmount(plain[1]);
+    if (amount !== null) {
+      return amount;
+    }
+  }
+  // قیمت بدون برچسب؛ فقط وقتی متن برچسب دیگری ندارد.
+  if (!/ودیعه|رهن|اجاره|قیمت|هر متر/.test(text)) {
+    return readAmount(text);
+  }
+  return null;
+}
+
 // قیمت یک آگهی را می‌خواند.
 // فقط دسته‌های اجاره رهن/اجاره دارند؛ دسته‌های خرید و زمین قیمت فروش دارند،
-// نه رهن — پس برای آن‌ها همیشه خالی برمی‌گردد و از جست‌وجوی بودجه کنار می‌مانند.
+// نه رهن — پس برای آن‌ها قیمت فروش خوانده می‌شود و رهن/اجاره خالی می‌مانند.
 // رهن را اول از «ودیعه» می‌خوانیم و اگر نبود از «رهن»؛
 // «رهن کامل» یعنی اجاره صفر است؛ اگر هیچ‌کدام خوانده نشد، خالی برمی‌گردد.
 export function parsePrice(priceText: string, category: string): ParsedPrice {
   if (!category.endsWith('-rent')) {
-    return { rahnAmount: null, ejareAmount: null };
+    return { rahnAmount: null, ejareAmount: null, saleAmount: findSaleAmount(priceText ?? '') };
   }
   const text = priceText ?? '';
   const rahnAmount = findAmount(text, ['ودیعه', 'رهن']);
@@ -96,5 +135,5 @@ export function parsePrice(priceText: string, category: string): ParsedPrice {
   if (ejareAmount === null && /رهن کامل/.test(text)) {
     ejareAmount = 0;
   }
-  return { rahnAmount, ejareAmount };
+  return { rahnAmount, ejareAmount, saleAmount: null };
 }

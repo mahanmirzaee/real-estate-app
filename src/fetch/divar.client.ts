@@ -25,11 +25,25 @@ export interface DivarPostResponse {
   }>;
 }
 
+// چیزی که از صفحه‌ی یک آگهی می‌خواهیم: متن توضیحات و همه‌ی عکس‌هایش.
+// عکس‌ها از ویجت گالری صفحه می‌آیند؛ اگر صفحه گالری نداشت، فقط عکس لیست می‌ماند.
+export interface DivarPostDetail {
+  // متن کامل توضیحات آگهی؛ اگر نبود، خالی است.
+  description: string;
+  // نشانی همه‌ی عکس‌های آگهی؛ حداکثر ۱۰ تا.
+  imageUrls: string[];
+}
+
 @Injectable()
 export class DivarClient {
   // یک دسته را از دیوار می‌گیرد؛ مثلاً همه‌ی «رهن و اجاره آپارتمان»‌ها را.
   // اگر صفحه‌ی دوم را بخواهیم، نشانی ادامه‌ی کار (paginationData) را می‌دهیم.
-  async search(category: string, paginationData?: unknown): Promise<DivarSearchResponse> {
+  // محله‌ها از بیرون می‌آیند (از تنظیمات)؛ اگر داده نشد، همان سه محله‌ی دفترچه‌ی ثابت.
+  async search(
+    category: string,
+    paginationData?: unknown,
+    districtIds: string[] = DISTRICT_IDS,
+  ): Promise<DivarSearchResponse> {
     // بدنه‌ی درخواستی که دیوار از ما می‌خواهد؛ دقیقاً همان چیزی که اسکریپت قدیمی می‌فرستاد.
     const body: Record<string, unknown> = {
       city_ids: [TEHRAN_CITY_ID],
@@ -37,7 +51,7 @@ export class DivarClient {
         form_data: {
           data: {
             category: { str: { value: category } },
-            districts: { repeated_string: { value: DISTRICT_IDS } },
+            districts: { repeated_string: { value: districtIds } },
             sort: { str: { value: 'sort_date' } },
           },
         },
@@ -77,10 +91,11 @@ export class DivarClient {
     throw new Error(`Divar API failed for ${category}: ${String(lastError)}`);
   }
 
-  // متن کامل یک آگهی را از صفحه‌ی خودش می‌گیرد؛ مثل اینکه آگهی را باز کنی و توضیحش را بخوانی.
-  // لیست جست‌وجو متن کامل را ندارد؛ فقط صفحه‌ی آگهی دارد.
-  // اگر صفحه نیامد یا توضیحی نداشت، خالی برمی‌گرداند؛ خطا نمی‌دهد تا تازه‌سازی نایستد.
-  async getPostDescription(token: string): Promise<string> {
+  // متن کامل و عکس‌های یک آگهی را از صفحه‌ی خودش می‌گیرد؛
+  // مثل اینکه آگهی را باز کنی و هم توضیحش را بخوانی هم عکس‌هایش را ببینی.
+  // لیست جست‌وجو متن کامل و عکس‌های بیشتر را ندارد؛ فقط صفحه‌ی آگهی دارد.
+  // اگر صفحه نیامد، خالی برمی‌گرداند؛ خطا نمی‌دهد تا تازه‌سازی نایستد.
+  async getPostDetail(token: string): Promise<DivarPostDetail> {
     const url = `${DIVAR_POST_API_URL}/${token}`;
     try {
       const controller = new AbortController();
@@ -92,18 +107,28 @@ export class DivarClient {
           signal: controller.signal,
         });
         if (!response.ok) {
-          return '';
+          return { description: '', imageUrls: [] };
         }
         const body = (await response.json()) as DivarPostResponse;
-        return extractDescription(body);
+        return {
+          description: extractDescription(body),
+          imageUrls: extractImageUrls(body),
+        };
       } finally {
         clearTimeout(timer);
       }
     } catch {
-      // اگر صفحه‌ی آگهی نیامد، متن را خالی می‌گذاریم؛
+      // اگر صفحه‌ی آگهی نیامد، متن و عکس را خالی می‌گذاریم؛
       // امکانات آن آگهی «معلوم نیست» می‌شود، ولی آگهی دور انداخته نمی‌شود.
-      return '';
+      return { description: '', imageUrls: [] };
     }
+  }
+
+  // متن کامل یک آگهی را از صفحه‌ی خودش می‌گیرد؛ همان `getPostDetail` است، فقط متن را می‌دهد.
+  // برای جاهایی که فقط متن را می‌خواهند.
+  async getPostDescription(token: string): Promise<string> {
+    const detail = await this.getPostDetail(token);
+    return detail.description;
   }
 
   // نشانی صفحه‌ی اول؛ دیوار برای صفحه‌ی اول این شکل را می‌خواهد.
@@ -120,6 +145,34 @@ export class DivarClient {
       },
     };
   }
+}
+
+// از صفحه‌ی آگهی، نشانی همه‌ی عکس‌ها را بیرون می‌کشد.
+// صفحه یک ویجت گالری دارد (`ImageCarouselData` — ایمیج کروسل دیتا) که
+// همه‌ی عکس‌ها با نشانی کاملشان در آن است؛ حداکثر ۱۰ تا برمی‌داریم.
+function extractImageUrls(body: DivarPostResponse): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const section of body.sections ?? []) {
+    for (const widget of section.widgets ?? []) {
+      const data = widget.data ?? {};
+      if (!String(data['@type'] ?? '').endsWith('ImageCarouselData')) {
+        continue;
+      }
+      const items = Array.isArray(data.items) ? data.items : [];
+      for (const item of items) {
+        const url = item?.image?.url ? String(item.image.url) : '';
+        if (url.startsWith('http') && !seen.has(url)) {
+          seen.add(url);
+          out.push(url);
+        }
+        if (out.length >= 10) {
+          return out;
+        }
+      }
+    }
+  }
+  return out;
 }
 
 // از صفحه‌ی آگهی، متن توضیحات را بیرون می‌کشد.

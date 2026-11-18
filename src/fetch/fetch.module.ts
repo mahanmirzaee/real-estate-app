@@ -2,6 +2,7 @@
 // `Module` (ماژول) یعنی یک جعبه که چند تا قطعه‌ی مرتبط را کنار هم نگه می‌دارد.
 
 import { Module } from '@nestjs/common';
+import { SettingsModule } from '../settings/settings.module';
 import { DivarClient } from './divar.client';
 import { DivarSource } from './divar.source';
 import { FetchService } from './fetch.service';
@@ -10,6 +11,8 @@ import { SheypoorSource } from './sheypoor.source';
 import { ListingSourceFactory } from './source-factory';
 
 @Module({
+  // محله‌ها از جعبه‌ی تنظیمات می‌آیند؛ میز اول در هر تازه‌سازی آن‌ها را می‌خواند.
+  imports: [SettingsModule],
   // قطعه‌هایی که این جعبه می‌سازد.
   providers: [DivarClient, SheypoorClient, DivarSource, SheypoorSource, ListingSourceFactory, FetchService],
   // این قطعه را به جعبه‌های دیگر هم می‌دهیم تا بتوانند آگهی بگیرند.

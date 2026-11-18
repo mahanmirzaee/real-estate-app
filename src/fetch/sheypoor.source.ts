@@ -4,7 +4,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SHEYPOOR_CATEGORIES, SHEYPOOR_DISTRICT_MAP, SHEYPOOR_NEIGHBOURHOOD_IDS } from '../common/constants';
 import { RawPost } from './listing.interface';
-import { ListingSource } from './listing-source.interface';
+import { FetchScope, ListingSource } from './listing-source.interface';
 import { SheypoorCard, SheypoorClient, SheypoorDetailAttributes } from './sheypoor.client';
 
 @Injectable()
@@ -15,17 +15,20 @@ export class SheypoorSource implements ListingSource {
   constructor(private readonly client: SheypoorClient) {}
 
   // همه‌ی دسته‌ها را می‌گیرد؛ هر دسته حداکثر دو صفحه، تا کار خیلی طول نکشد.
-  async fetchAll(maxPages = 2): Promise<RawPost[]> {
+  // محله‌ها از بیرون می‌آیند (از تنظیمات)؛ اگر داده نشد، همان سه محله‌ی دفترچه‌ی ثابت.
+  async fetchAll(maxPages = 2, scope?: FetchScope): Promise<RawPost[]> {
     const all: RawPost[] = [];
+    const neighbourhoodIds = scope?.sheypoorNeighbourhoodIds ?? SHEYPOOR_NEIGHBOURHOOD_IDS;
+    const districtMap = scope?.sheypoorDistrictMap ?? SHEYPOOR_DISTRICT_MAP;
     for (const category of SHEYPOOR_CATEGORIES) {
       for (let page = 1; page <= maxPages; page++) {
-        const body = await this.client.search(category.slug, SHEYPOOR_NEIGHBOURHOOD_IDS, page);
+        const body = await this.client.search(category.slug, neighbourhoodIds, page);
         const cards = this.flatten(body.data ?? []);
         // برای هر آگهی، جزئیاتش را هم می‌گیریم تا توضیح واقعی و نشانه‌ی آژانس را داشته باشیم؛
         // سه تا هم‌زمان، نه بیشتر، تا به شیپور فشار نیاید.
         const details = await this.fetchDetails(cards);
         for (const card of cards) {
-          const district = this.districtOf(card.attributes?.location);
+          const district = this.districtOf(card.attributes?.location, districtMap);
           // آگهی‌ای که محله‌اش یکی از سه محله‌ی ماهان نیست
           // (مثلاً تبلیغ سراسری یا آگهی اطراف که فیلتر را دور زده)، کنار گذاشته می‌شود.
           if (!district || !card.id || !card.attributes?.title) {
@@ -33,6 +36,14 @@ export class SheypoorSource implements ListingSource {
           }
           const detail = details.get(String(card.id));
           const description = detail ? this.cleanDescription(detail.description) : '';
+          // همه‌ی عکس‌های آگهی از جزئیاتش؛ نشانی دسکتاپ بزرگ‌تر است، اگر نبود موبایل.
+          // حداکثر ۱۰ تا؛ اگر جزئیات عکسی نداشت، همان عکس تکی کارت می‌ماند.
+          const imageUrls = detail
+            ? (detail.images ?? [])
+                .map((image) => image.source?.desktop ?? image.source?.mobile ?? '')
+                .filter((url) => url.startsWith('http'))
+                .slice(0, 10)
+            : [];
           all.push({
             token: String(card.id),
             title: String(card.attributes.title),
@@ -47,6 +58,8 @@ export class SheypoorSource implements ListingSource {
             url: String(card.attributes.url ?? `https://www.sheypoor.com/v/${card.id}`),
             // عکس آگهی را هم برمی‌داریم؛ شیپور عکس کوچک کارت را در `images.thumbnails.round` می‌دهد.
             imageUrl: card.attributes.images?.thumbnails?.round ?? undefined,
+            // عکس‌های گالری از جزئیات؛ اگر نبود، خالی می‌ماند و همان عکس تکی نشان داده می‌شود.
+            imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
             // متن کامل آگهی را جدا هم نگه می‌داریم تا امکانات (پارکینگ، انباری، آسانسور) از رویش دربیاید؛
             // در `bottomText` (باتم‌تکست) هم هست تا قانون‌های متنی میز دوم روی آن کار کنند.
             description: description || undefined,
@@ -118,12 +131,13 @@ export class SheypoorSource implements ListingSource {
   }
 
   // محله را از نشانی آگهی می‌خوانیم؛ مثلاً «تهران، سید خندان» یعنی «سید خندان (جلفا)».
-  private districtOf(location: string | undefined): string {
+  // نقشه‌ی اسم‌ها از بیرون می‌آید (از تنظیمات)؛ اگر داده نشد، همان نقشه‌ی ثابت قبلی.
+  private districtOf(location: string | undefined, districtMap: Record<string, string>): string {
     if (!location) {
       return '';
     }
     const name = location.replace(/^تهران،\s*/, '').trim();
-    return SHEYPOOR_DISTRICT_MAP[name] ?? '';
+    return districtMap[name] ?? '';
   }
 
   // قیمت را به زبان آدم می‌نویسیم؛ برای اجاره، رهن و اجاره جدا گفته می‌شود.

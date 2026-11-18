@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- نشان «موتور جست‌وجوگر ماهان»؛ ذره‌بین طلایی و خانه، روی زمینه‌ی تیره. -->
+  <rect width="64" height="64" rx="14" fill="#141414"/>
+  <g fill="none" stroke="#d4a017" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 34 L32 20 L50 34"/>
+    <path d="M19 32 V48 H45 V32"/>
+    <path d="M28 48 V38 H36 V48"/>
+  </g>
+  <circle cx="44" cy="42" r="9" fill="none" stroke="#f5c542" stroke-width="4"/>
+  <line x1="51" y1="49" x2="58" y2="56" stroke="#f5c542" stroke-width="4" stroke-linecap="round"/>
+</svg>

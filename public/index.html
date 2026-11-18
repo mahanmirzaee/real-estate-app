@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- صفحه‌ی «موتور جست‌وجوگر ماهان» — نسخه‌ی پنجم؛ ویترین بنگاه. -->
+<!-- صفحه‌ی «موتور جست‌وجوگر ماهان» — نسخه‌ی ۵٫۱؛ ویترین بنگاه. -->
 <!-- این صفحه فقط نمایش می‌دهد؛ همه‌ی داده‌ها را از خود برنامه می‌گیرد: -->
 <!-- لیست آگهی‌ها از /listings، اعلان‌های تازه از /notifications، وضعیت زمان‌بندی از /scheduler/status. -->
 <!-- سه ستون دارد: پنل کناری (بخش‌ها)، کارت‌های آگهی (وسط) و چت وضعیت (چپ). -->
@@ -8,6 +8,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>موتور جست‌وجوگر ماهان</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -19,7 +20,6 @@
       <button id="logout" class="btn ghost">خروج</button>
     </div>
     <h1>🔍 موتور جست‌وجوگر ماهان</h1>
-    <p class="subtitle">آگهی‌های شخصی دیوار و شیپور — محله‌های مهران، جلفا و دبستان</p>
     <div class="timer-bar">
       <span id="timer">تازه‌سازی بعدی: …</span>
       <button id="refresh" class="btn gold">🔄 تازه‌سازی</button>
@@ -38,6 +38,9 @@
         <button data-view="buy-office" class="side-btn">🗝️ خرید دفترکار</button>
         <button data-view="budget" class="side-btn">💰 سرچ بودجه</button>
         <button data-view="new" class="side-btn">🆕 آگهی‌های جدید <span id="new-count" class="new-count"></span></button>
+        <button data-view="match" class="side-btn">🔎 مشتری‌یاب</button>
+        <button data-view="clients" class="side-btn">📒 مشتری‌ها</button>
+        <button data-view="districts" class="side-btn">📍 محله‌ها</button>
       </nav>
     </aside>
 
@@ -63,13 +66,103 @@
           <p id="budget-status" class="status"></p>
         </div>
 
-        <!-- دکمه‌ی «خوانده شد»؛ فقط در بخش «آگهی‌های جدید» دیده می‌شود. -->
+        <!-- «مشتری‌یاب»؛ جمله‌ی فارسی مشتری را می‌نویسد و آگهی‌های مناسبش می‌آیند. -->
+        <!-- این بخش به هیچ سرویس هوش مصنوعی وصل نیست؛ فقط با قانون و کلمه جمله را می‌فهمد. -->
+        <div id="match-form" class="budget-form" hidden>
+          <label>
+            جمله‌ی مشتری را بنویس
+            <textarea id="match-text" rows="3" placeholder="مثلاً: من مشتری دارم، اجاره می‌خواد، پارکینگ می‌خواد، پولش نهایت ۵۰۰ ودیعه با اجاره ۷۰ میلیون"></textarea>
+          </label>
+          <button id="match-search" class="btn gold">🔍 پیدا کن</button>
+          <p class="hint">جمله را با کلمه‌های خودت بنویس؛ برنامه اجاره یا خرید، سقف ودیعه، سقف اجاره، پارکینگ و انباری و آسانسور، محله و نوع ملک را از جمله درمی‌آورد. «بدون پارکینگ» یعنی پارکینگ نمی‌خواهد.</p>
+          <p id="match-summary" class="match-summary" hidden></p>
+          <p id="match-status" class="status"></p>
+        </div>
+
+        <!-- دفترچه‌ی مشتری‌ها؛ اضافه کردن مشتری و دیدن مشتری‌های ذخیره‌شده. -->
+        <div id="clients-section" hidden>
+          <div class="budget-form">
+            <h3>➕ مشتری تازه</h3>
+            <label>
+              اسم مشتری
+              <input id="client-name" type="text" placeholder="مثلاً آقای رضایی">
+            </label>
+            <label>
+              دنبال چه چیزی است؟
+              <select id="client-kind">
+                <option value="rent">اجاره</option>
+                <option value="buy">خرید</option>
+              </select>
+            </label>
+            <label>
+              سقف ودیعه (تومان) — برای خرید، سقف قیمت کل
+              <input id="client-max-deposit" type="number" min="0" step="1000000" placeholder="مثلاً 500000000">
+            </label>
+            <label>
+              سقف اجاره‌ی ماهانه (تومان) — فقط برای اجاره
+              <input id="client-max-rent" type="number" min="0" step="1000000" placeholder="مثلاً 70000000">
+            </label>
+            <label>
+              محله
+              <select id="client-district"></select>
+            </label>
+            <div class="checks">
+              <label><input id="client-parking" type="checkbox"> پارکینگ می‌خواهد</label>
+              <label><input id="client-storage" type="checkbox"> انباری می‌خواهد</label>
+              <label><input id="client-elevator" type="checkbox"> آسانسور می‌خواهد</label>
+            </div>
+            <label>
+              یادداشت
+              <input id="client-note" type="text" placeholder="یادداشت کوتاه">
+            </label>
+            <button id="client-add" class="btn gold">➕ اضافه کن</button>
+            <p id="client-status" class="status"></p>
+          </div>
+          <div id="clients-list" class="clients-list"></div>
+        </div>
+
+        <!-- محله‌ها؛ محله‌هایی که جست‌وجو می‌شوند. تغییر از تازه‌سازی بعدی اثر می‌کند. -->
+        <div id="districts-section" hidden>
+          <div class="budget-form">
+            <h3>📍 محله‌های جست‌وجو</h3>
+            <p class="hint">این محله‌ها در دیوار و شیپور جست‌وجو می‌شوند. اگر محله‌ای را عوض کنی، از تازه‌سازی بعدی اثر می‌کند؛ آگهی‌های قدیمی محله‌ی حذف‌شده پاک نمی‌شوند.</p>
+            <div id="districts-list" class="districts-list"></div>
+            <label>
+              اسم محله
+              <input id="district-name" type="text" placeholder="مثلاً نارمک">
+            </label>
+            <label>
+              شناسه‌ی عددی محله در دیوار (اختیاری)
+              <input id="district-id" type="number" min="1" step="1" placeholder="مثلاً 95">
+            </label>
+            <button id="district-add" class="btn gold">➕ اضافه کن</button>
+            <p class="hint">شناسه‌ی عددی را از آدرس صفحه‌ی جست‌وجوی آن محله در سایت دیوار بردار؛ در آدرس، بعد از districts= عدد محله است. اگر شناسه را خالی بگذاری و اسم محله یکی از مهران، جلفا یا دبستان باشد، خود برنامه شناسه‌اش را می‌داند؛ برای محله‌ی دیگر باید شناسه را بدهی، وگرنه ذخیره نمی‌شود.</p>
+            <p id="district-status" class="status"></p>
+          </div>
+        </div>
+
+        <!-- دکمه‌ی «خوانده شد» و فیلتر بودجه‌ی آگهی‌های جدید؛ فقط در بخش «آگهی‌های جدید» دیده می‌شود. -->
         <div id="new-actions" hidden>
           <button id="read-all" class="btn gold">خوانده شد ✓</button>
           <p class="hint">آگهی‌هایی که بعد از آخرین تازه‌سازی اضافه شده‌اند و هنوز خوانده نشده‌اند.</p>
+          <div class="new-budget">
+            <label class="check-line">
+              <input id="new-budget-all" type="checkbox" checked>
+              همه‌ی بودجه‌ها را نمایش بده
+            </label>
+            <label>
+              رهن کامل مورد نظر (تومان)
+              <input id="new-budget-target" type="number" min="1" step="1000000" placeholder="مثلاً 2000000000">
+            </label>
+            <label>
+              حداکثر رهن (تومان)
+              <input id="new-budget-max" type="number" min="1" step="1000000" placeholder="مثلاً 2500000000">
+            </label>
+            <p class="hint">اگر تیک بالا را برداری و بودجه بدهی، فقط آگهی‌های جدیدی می‌آیند که معادل رهن کامل آن‌ها زیر سقف باشد؛ مثل سرچ بودجه، با همان نسبت ۳٪.</p>
+          </div>
         </div>
 
-        <!-- فیلترهای سریع؛ منبع و زمین. در بخش بودجه نیست چون آن بخش از سرور می‌آید. -->
+        <!-- فیلترهای سریع؛ منبع و زمین و محله و وضعیت. در بخش بودجه و محله‌ها نیست چون آن‌ها از سرور می‌آیند یا لیست نیستند. -->
         <div id="quick-filters" class="toolbar filter-bar">
           <div class="filters" id="filters">
             <button data-source="all" class="filter-btn active">همه</button>
@@ -77,6 +170,14 @@
             <button data-source="sheypoor" class="filter-btn">شیپور</button>
           </div>
           <button id="land-chip" class="filter-btn chip">🌍 زمین</button>
+          <div class="filters" id="district-chips"></div>
+          <select id="status-filter" class="status-filter" aria-label="فیلتر وضعیت">
+            <option value="">همه‌ی وضعیت‌ها</option>
+            <option value="called">زنگ زدم</option>
+            <option value="visited">بازدید رفت</option>
+            <option value="done">معامله شد</option>
+            <option value="rejected">رد شد</option>
+          </select>
         </div>
 
         <p id="status" class="status"></p>

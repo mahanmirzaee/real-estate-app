@@ -5,6 +5,19 @@
 
 import { Injectable } from '@nestjs/common';
 
+// آگهی تازه‌ای که به درد یک مشتری می‌خورد؛
+  // بعد از هر تازه‌سازی، چت وضعیت از روی همین‌ها می‌گوید «این آگهی به درد مشتری X می‌خوره».
+export interface ClientMatch {
+  // شناسه‌ی مشتری در دفترچه.
+  clientId: number;
+  // اسم مشتری.
+  clientName: string;
+  // شناسه‌ی آگهی تازه.
+  token: string;
+  // تیتر آگهی تازه.
+  title: string;
+}
+
 // نتیجه‌ی یک دور تازه‌سازی؛ همان چهار عدد نسخه‌ی چهارم،
 // به‌علاوه‌ی «از هر منبع چند تا» تا صفحه بتواند بنویسد «چند تا از دیوار، چند تا از شیپور».
 export interface RefreshResult {
@@ -20,6 +33,8 @@ export interface RefreshResult {
   fetchedBySource: { divar: number; sheypoor: number };
   // از هر منبع چند آگهی تازه اضافه شد.
   addedBySource: { divar: number; sheypoor: number };
+  // آگهی‌های تازه‌ای که به درد مشتری‌های دفترچه می‌خورند؛ اگر مشتری‌ای نباشد، خالی است.
+  clientMatches?: ClientMatch[];
 }
 
 // یک دور تازه‌سازی با وقتش؛ همان نتیجه، به‌علاوه‌ی «کی انجام شد».

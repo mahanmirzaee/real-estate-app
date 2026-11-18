@@ -5,10 +5,23 @@
 
 import { RawPost } from './listing.interface';
 
+// چیزی که هر دور تازه‌سازی با خودش به منبع‌ها می‌دهد: «کجا بگردیم».
+// محله‌ها از تنظیمات می‌آیند، نه از دفترچه‌ی ثابت؛ پس اگر ماهان محله‌ای اضافه کند،
+// دور بعدی همان محله‌های تازه را می‌گردد.
+export interface FetchScope {
+  // شناسه‌های عددی محله‌ها در دیوار؛ مثل ['95', '1028', '127'].
+  divarDistrictIds: string[];
+  // شناسه‌های محله‌ها در شیپور؛ مثل ['4711', '4757', '1046'].
+  sheypoorNeighbourhoodIds: string[];
+  // اسم شیپور به اسم نمایشی؛ مثل 'سید خندان' به 'سید خندان (جلفا)'.
+  sheypoorDistrictMap: Record<string, string>;
+}
+
 export interface ListingSource {
   // اسم منبع؛ 'divar' یا 'sheypoor'.
   readonly source: 'divar' | 'sheypoor';
 
   // آگهی‌های خام را می‌گیرد؛ هر منبع حداکثر دو صفحه، تا کار خیلی طول نکشد.
-  fetchAll(maxPages?: number): Promise<RawPost[]>;
+  // اگر محدوده داده نشد، همان محله‌های دفترچه‌ی ثابت.
+  fetchAll(maxPages?: number, scope?: FetchScope): Promise<RawPost[]>;
 }

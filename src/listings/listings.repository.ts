@@ -28,4 +28,16 @@ export abstract class ListingsRepository {
     addedBySource: { divar: number; sheypoor: number };
     total: number;
   }>;
+
+  // وضعیت و یادداشت ماهان روی یک آگهی را ذخیره می‌کند؛
+  // اگر وضعیت خالی باشد، وضعیت و یادداشت آن آگهی پاک می‌شود.
+  // وضعیت در جدول جداست تا تازه‌سازی هرگز پاکش نکند.
+  abstract saveStatus(
+    token: string,
+    status: string | null,
+    note?: string | null,
+  ): Promise<{ token: string; status: string | null; note: string | null }>;
+
+  // همه‌ی وضعیت‌ها و یادداشت‌ها را می‌دهد؛ کلیدشان شناسه‌ی آگهی است.
+  abstract findStatuses(): Promise<Map<string, { status: string; note: string | null }>>;
 }

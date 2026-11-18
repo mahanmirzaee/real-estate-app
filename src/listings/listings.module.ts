@@ -5,6 +5,7 @@ import { FetchModule } from '../fetch/fetch.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
+import { SettingsModule } from '../settings/settings.module';
 import { ListingsController } from './listings.controller';
 import { PrismaListingsRepository } from './listings.prisma-repository';
 import { ListingsRepository } from './listings.repository';
@@ -16,7 +17,8 @@ import { ListingsService } from './listings.service';
   // برای حافظه‌ی موقت هم به ماژول ردیس نیاز داریم؛
   // برای اینکه دکمه‌ی دستی تایمر را از اول بیندازد، به جعبه‌ی زمان‌بندی نیاز داریم.
   // جعبه‌ی زمان‌بندی هم به ما نیاز دارد، پس با `forwardRef` (فوروارد رف) به هم وصل می‌شویم.
-  imports: [FetchModule, PrismaModule, RedisModule, forwardRef(() => SchedulerModule)],
+  // محله‌های پیکربندی‌شده هم از جعبه‌ی تنظیمات می‌آیند.
+  imports: [FetchModule, PrismaModule, RedisModule, SettingsModule, forwardRef(() => SchedulerModule)],
   controllers: [ListingsController],
   providers: [
     ListingsService,

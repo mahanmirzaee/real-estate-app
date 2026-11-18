@@ -48,6 +48,9 @@ export interface SheypoorDetailAttributes {
   isShopProfile?: boolean;
   consultant?: Record<string, unknown> | null;
   seller?: { name?: string };
+  // همه‌ی عکس‌های آگهی؛ هر عکس یک نشانی بزرگ دسکتاپ و یک نشانی موبایل دارد.
+  // برای گالری کارت، نشانی دسکتاپ را می‌گیریم؛ اگر نبود، موبایل.
+  images?: Array<{ source?: { desktop?: string; mobile?: string } }>;
 }
 
 @Injectable()

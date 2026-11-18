@@ -3,13 +3,15 @@
 
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
+import { ClientsModule } from './clients/clients.module';
 import { ConvertModule } from './convert/convert.module';
 import { FetchModule } from './fetch/fetch.module';
 import { ListingsModule } from './listings/listings.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
-  imports: [AuthModule, FetchModule, ListingsModule, ConvertModule, SchedulerModule, NotificationsModule],
+  imports: [AuthModule, ClientsModule, FetchModule, ListingsModule, ConvertModule, SchedulerModule, NotificationsModule, SettingsModule],
 })
 export class AppModule {}

@@ -19,6 +19,25 @@ function featuresToJson(features: ListingFeatures | null | undefined): Prisma.In
   return JSON.parse(JSON.stringify(features)) as Prisma.InputJsonValue;
 }
 
+// لیست رشته‌ها را به شکل `JSON` (جیسون) خام برمی‌گرداند تا پریزما قبولش کند؛
+// اگر لیست خالی بود، خالی برمی‌گردانیم تا ستون خالی بماند.
+function stringArrayToJson(values: string[] | null | undefined): Prisma.InputJsonValue | undefined {
+  if (!values || values.length === 0) {
+    return undefined;
+  }
+  return JSON.parse(JSON.stringify(values)) as Prisma.InputJsonValue;
+}
+
+// چیزی که از دیتابیس (ستون `JSON` — جیسون) می‌آید را به لیست رشته برمی‌گرداند؛
+// اگر شکلش درست نبود، خالی برمی‌گرداند تا کارت خراب نشود.
+function stringArrayFromJson(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const out = value.filter((item): item is string => typeof item === 'string' && item.length > 0);
+  return out.length > 0 ? out : null;
+}
+
 @Injectable()
 export class PrismaListingsRepository extends ListingsRepository {
   constructor(private readonly prisma: PrismaService) {
@@ -40,8 +59,16 @@ export class PrismaListingsRepository extends ListingsRepository {
       source: row.source as 'divar' | 'sheypoor',
       fetchedAt: row.fetchedAt.toISOString(),
       imageUrl: row.imageUrl ?? null,
+      // عکس‌های گالری؛ اگر منبع بیش از یک عکس داده باشد، همه اینجاست.
+      imageUrls: stringArrayFromJson(row.imageUrls),
       rahnAmount: row.rahnAmount ?? null,
       ejareAmount: row.ejareAmount ?? null,
+      // قیمت فروش و متراژ؛ اگر خوانده نشده باشند، خالی‌اند.
+      saleAmount: row.saleAmount ?? null,
+      areaSqm: row.areaSqm ?? null,
+      // وضعیت و یادداشت را جدا پر می‌کنیم؛ اینجا خالی می‌ماند تا `findAll` پرش کند.
+      status: null,
+      note: null,
       // متن کامل آگهی؛ اگر وقتی ذخیره شد متن نداشت (آگهی قدیمی)، خالی است.
       description: row.description ?? null,
       // امکانات را از ستون `JSON` (جیسون) برمی‌گردانیم؛ اگر شکلش درست نبود، خالی است.
@@ -51,17 +78,69 @@ export class PrismaListingsRepository extends ListingsRepository {
 
   // همه‌ی آگهی‌های ذخیره‌شده را برمی‌گرداند؛ قدیمی‌ها اول، تازه‌ها آخر —
   // دقیقاً همان ترتیبی که قبلاً با فایل بود.
+  // وضعیت و یادداشت هر آگهی هم رویش می‌نشیند؛ اگر وضعیتی نبود، خالی می‌ماند.
   async findAll(): Promise<Listing[]> {
-    const rows = await this.prisma.listing.findMany({
-      orderBy: [{ fetchedAt: 'asc' }, { id: 'asc' }],
+    const [rows, statuses] = await Promise.all([
+      this.prisma.listing.findMany({
+        orderBy: [{ fetchedAt: 'asc' }, { id: 'asc' }],
+      }),
+      this.findStatuses(),
+    ]);
+    return rows.map((row) => {
+      const listing = this.toListing(row);
+      const saved = statuses.get(row.token);
+      if (saved) {
+        listing.status = saved.status;
+        listing.note = saved.note;
+      }
+      return listing;
     });
-    return rows.map((row) => this.toListing(row));
   }
 
   // یک آگهی را با شناسه‌اش پیدا می‌کند؛ اگر نبود، خالی برمی‌گرداند.
   async findByToken(token: string): Promise<Listing | undefined> {
     const row = await this.prisma.listing.findUnique({ where: { token } });
-    return row ? this.toListing(row) : undefined;
+    if (!row) {
+      return undefined;
+    }
+    const listing = this.toListing(row);
+    const saved = await this.prisma.listingStatus.findUnique({ where: { token } });
+    if (saved) {
+      listing.status = saved.status;
+      listing.note = saved.note;
+    }
+    return listing;
+  }
+
+  // وضعیت و یادداشت یک آگهی را ذخیره می‌کند؛ اگر وضعیت خالی باشد، ردیفش پاک می‌شود.
+  // اگر یادداشت داده نشده باشد، یادداشت قبلی سر جایش می‌ماند.
+  async saveStatus(
+    token: string,
+    status: string | null,
+    note?: string | null,
+  ): Promise<{ token: string; status: string | null; note: string | null }> {
+    if (status === null) {
+      await this.prisma.listingStatus.deleteMany({ where: { token } });
+      return { token, status: null, note: null };
+    }
+    const existing = await this.prisma.listingStatus.findUnique({ where: { token } });
+    const nextNote = note === undefined ? (existing?.note ?? null) : note;
+    const saved = await this.prisma.listingStatus.upsert({
+      where: { token },
+      create: { token, status, note: nextNote },
+      update: { status, note: nextNote },
+    });
+    return { token, status: saved.status, note: saved.note ?? null };
+  }
+
+  // همه‌ی وضعیت‌ها و یادداشت‌ها را می‌دهد؛ کلیدشان شناسه‌ی آگهی است.
+  async findStatuses(): Promise<Map<string, { status: string; note: string | null }>> {
+    const rows = await this.prisma.listingStatus.findMany();
+    const out = new Map<string, { status: string; note: string | null }>();
+    for (const row of rows) {
+      out.set(row.token, { status: row.status, note: row.note ?? null });
+    }
+    return out;
   }
 
   // همه‌ی آگهی‌ها را ذخیره می‌کند؛ اول همه‌ی قبلی‌ها را پاک می‌کند
@@ -83,8 +162,11 @@ export class PrismaListingsRepository extends ListingsRepository {
           source: listing.source,
           fetchedAt: new Date(listing.fetchedAt),
           imageUrl: listing.imageUrl ?? null,
+          imageUrls: stringArrayToJson(listing.imageUrls),
           rahnAmount: listing.rahnAmount ?? null,
           ejareAmount: listing.ejareAmount ?? null,
+          saleAmount: listing.saleAmount ?? null,
+          areaSqm: listing.areaSqm ?? null,
           description: listing.description ?? null,
           features: featuresToJson(listing.features),
         })),
@@ -131,8 +213,11 @@ export class PrismaListingsRepository extends ListingsRepository {
           source: listing.source,
           fetchedAt: new Date(listing.fetchedAt),
           imageUrl: listing.imageUrl ?? null,
+          imageUrls: stringArrayToJson(listing.imageUrls),
           rahnAmount: listing.rahnAmount ?? null,
           ejareAmount: listing.ejareAmount ?? null,
+          saleAmount: listing.saleAmount ?? null,
+          areaSqm: listing.areaSqm ?? null,
           description: listing.description ?? null,
           features: featuresToJson(listing.features),
         })),
@@ -180,6 +265,40 @@ export class PrismaListingsRepository extends ListingsRepository {
             },
           });
         }
+      }
+      // آگهی‌هایی که از قبل بودند ولی عکس‌های گالری نداشتند، حالا که دوباره دیده شدند
+      // و عکس تازه‌شان هست، عکس‌هایشان را می‌گیرند تا کارت‌های قدیمی هم گالری شوند.
+      // برای ستون `JSON` (جیسون) نمی‌شود مستقیم `null` نوشت؛ باید گفت «برابر خالی جیسون است».
+      for (const listing of incoming) {
+        if (listing.imageUrls && listing.imageUrls.length > 0) {
+          await tx.listing.updateMany({
+            where: { token: listing.token, imageUrls: { equals: Prisma.JsonNull } },
+            data: { imageUrls: stringArrayToJson(listing.imageUrls) },
+          });
+        }
+      }
+      // آگهی‌هایی که از قبل بودند ولی متراژ یا قیمت فروش نداشتند، حالا که دوباره دیده شدند
+      // و عدد تازه‌شان هست، عددهایشان را می‌گیرند تا «متری» روی کارت‌های قدیمی هم بیاید.
+      for (const listing of incoming) {
+        const data: Record<string, number> = {};
+        if (listing.areaSqm !== null && listing.areaSqm !== undefined) {
+          data.areaSqm = listing.areaSqm;
+        }
+        if (listing.saleAmount !== null && listing.saleAmount !== undefined) {
+          data.saleAmount = listing.saleAmount;
+        }
+        if (Object.keys(data).length === 0) {
+          continue;
+        }
+        const where: Record<string, unknown> = { token: listing.token };
+        const missing: Array<Record<string, null>> = [];
+        if (data.areaSqm !== undefined) {
+          missing.push({ areaSqm: null });
+        }
+        if (data.saleAmount !== undefined) {
+          missing.push({ saleAmount: null });
+        }
+        await tx.listing.updateMany({ where: { ...where, OR: missing }, data });
       }
       // برای هر آگهی تازه، یک رویداد در دفتر اوت‌باکس می‌نویسیم؛
       // خود آگهی کامل، داخل رویداد هم هست تا خواننده لازم نباشد دوباره بپرسد.
