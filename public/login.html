@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!-- صفحه‌ی ورود «موتور جست‌وجوگر ماهان»؛ کد ۶ رقمی را می‌گیرد. -->
+<!-- این صفحه خودش همه‌ی ظاهرش را دارد (بدون فایل جدا)، چون بقیه‌ی فایل‌ها پشت ورودند. -->
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ورود — موتور جست‌وجوگر ماهان</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #141414;
+      color: #f0ead8;
+      font-family: Tahoma, sans-serif;
+      line-height: 1.8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .box {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 16px;
+      padding: 32px 28px;
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+    h1 { margin: 0 0 4px; font-size: 24px; color: #d4af37; }
+    p { margin: 0 0 20px; color: #c9c2ab; font-size: 15px; }
+    label { display: block; text-align: right; font-size: 14px; color: #c9c2ab; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      background: #2a2a2a;
+      color: #f0ead8;
+      border: 1px solid #555;
+      border-radius: 10px;
+      padding: 12px;
+      font-family: inherit;
+      font-size: 22px;
+      letter-spacing: 10px;
+      text-align: center;
+      direction: ltr;
+    }
+    input:focus { outline: none; border-color: #d4af37; }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 999px;
+      padding: 10px 32px;
+      font-family: inherit;
+      font-size: 16px;
+      background: #d4af37;
+      color: #1a1a1a;
+      font-weight: bold;
+      margin-top: 18px;
+      width: 100%;
+    }
+    button:hover { background: #e8c96a; }
+    button:disabled { opacity: 0.5; cursor: wait; }
+    .error { color: #ff8a80; font-size: 14px; margin: 12px 0 0; min-height: 20px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>🔍 موتور جست‌وجوگر ماهان</h1>
+    <p>کد ۶ رقمی ورود را بده.</p>
+    <form id="login-form">
+      <label for="code">کد ورود</label>
+      <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" autofocus>
+      <button id="submit" type="submit">ورود</button>
+      <p id="error" class="error"></p>
+    </form>
+  </div>
+  <script>
+    // کد را به برنامه می‌فرستد؛ اگر درست بود، به صفحه‌ی اصلی می‌رود.
+    document.getElementById('login-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const code = document.getElementById('code').value.trim();
+      const error = document.getElementById('error');
+      const button = document.getElementById('submit');
+      if (!/^\d{6}$/.test(code)) {
+        error.textContent = 'کد باید ۶ رقم باشد.';
+        return;
+      }
+      button.disabled = true;
+      error.textContent = '';
+      try {
+        const response = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        if (!response.ok) {
+          error.textContent = 'کد اشتباه است؛ دوباره امتحان کن.';
+          button.disabled = false;
+          return;
+        }
+        window.location.href = '/';
+      } catch (e) {
+        error.textContent = 'وصل نشد؛ دوباره امتحان کن.';
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -8,6 +8,8 @@ import { RAHN_TO_EJARE_RATIO } from '../convert/convert.service';
 import { FetchService } from '../fetch/fetch.service';
 import { Listing, RawPost } from '../fetch/listing.interface';
 import { RedisService } from '../redis/redis.service';
+import { RefreshResult } from '../scheduler/refresh-status.service';
+import { extractFeatures } from './features';
 import { ListingsRepository } from './listings.repository';
 import { parsePrice } from './price-parser';
 
@@ -29,7 +31,9 @@ export class ListingsService {
 
   // یک دور تازه از همه‌ی منبع‌ها می‌گیرد، فیلتر می‌کند و تازه‌ها را ذخیره می‌کند؛
   // بعد هم لیست‌های روی تخته‌ی ردیس را پاک می‌کند تا دفعه‌ی بعد تازه خوانده شوند.
-  async refresh(): Promise<{ fetched: number; added: number; skippedAgency: number; total: number }> {
+  // جواب همان چهار عدد نسخه‌ی چهارم است، به‌علاوه‌ی «از هر منبع چند تا»؛
+  // شکل قدیمی جواب عوض نشده، فقط دو فیلد به آخرش اضافه شده است.
+  async refresh(): Promise<RefreshResult> {
     const rawPosts = await this.fetchService.fetchAll();
     let skippedAgency = 0;
     const fresh: Listing[] = [];
@@ -58,12 +62,30 @@ export class ListingsService {
         imageUrl: post.imageUrl ? post.imageUrl : null,
         rahnAmount: parsed.rahnAmount,
         ejareAmount: parsed.ejareAmount,
+        // متن کامل آگهی را هم می‌بریم؛ برای دیوار از صفحه‌ی خود آگهی آمده، برای شیپور از جزئیاتش.
+        // اگر متن نبود، خالی می‌ماند و امکانات «معلوم نیست» می‌شود.
+        description: post.description || null,
+        // امکانات را از روی متن درمی‌آوریم؛ اگر متن نبود، همه‌چیز خالی است،
+        // یعنی «معلوم نیست»، نه «ندارد» — روی کارت خاکستری نشان داده می‌شود، نه قرمز.
+        features: post.description ? extractFeatures(post.description) : null,
       });
     }
     const saved = await this.repository.upsert(fresh);
     // حافظه‌ی موقت را پاک می‌کنیم تا لیست بعدی از دیتابیس تازه خوانده شود.
     await this.redis.delByPrefix('listings:');
-    return { fetched: rawPosts.length, added: saved.added, skippedAgency, total: saved.total };
+    // از هر منبع چند آگهی خام گرفته شد؛ از روی همان لیست خام می‌شماریم.
+    const fetchedBySource = { divar: 0, sheypoor: 0 };
+    for (const post of rawPosts) {
+      fetchedBySource[post.source]++;
+    }
+    return {
+      fetched: rawPosts.length,
+      added: saved.added,
+      skippedAgency,
+      total: saved.total,
+      fetchedBySource,
+      addedBySource: saved.addedBySource,
+    };
   }
 
   // آگهی‌های ذخیره‌شده را برمی‌گرداند؛ اگر محله داده شود، فقط همان محله را می‌دهد.

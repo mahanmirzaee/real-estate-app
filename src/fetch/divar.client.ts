@@ -4,12 +4,25 @@
 // `Injectable` (اینجکتبل) یعنی: «این کلاس را `NestJS` (نست‌جی‌اس) بسازد
 // و هر جا که لازم بود، تحویل بدهد.»
 import { Injectable } from '@nestjs/common';
-import { DISTRICT_IDS, DIVAR_API_URL, TEHRAN_CITY_ID, USER_AGENT } from '../common/constants';
+import {
+  DISTRICT_IDS,
+  DIVAR_API_URL,
+  DIVAR_POST_API_URL,
+  TEHRAN_CITY_ID,
+  USER_AGENT,
+} from '../common/constants';
 
 // شکل جوابی که دیوار برمی‌گرداند.
 export interface DivarSearchResponse {
   list_widgets?: Array<{ data?: Record<string, any> }>;
   pagination?: { has_next_page?: boolean; data?: unknown };
+}
+
+// شکل صفحه‌ی یک آگهی؛ بخش‌ها و ویجت‌ها تو در تو هستند.
+export interface DivarPostResponse {
+  sections?: Array<{
+    widgets?: Array<{ data?: Record<string, any> }>;
+  }>;
 }
 
 @Injectable()
@@ -64,6 +77,35 @@ export class DivarClient {
     throw new Error(`Divar API failed for ${category}: ${String(lastError)}`);
   }
 
+  // متن کامل یک آگهی را از صفحه‌ی خودش می‌گیرد؛ مثل اینکه آگهی را باز کنی و توضیحش را بخوانی.
+  // لیست جست‌وجو متن کامل را ندارد؛ فقط صفحه‌ی آگهی دارد.
+  // اگر صفحه نیامد یا توضیحی نداشت، خالی برمی‌گرداند؛ خطا نمی‌دهد تا تازه‌سازی نایستد.
+  async getPostDescription(token: string): Promise<string> {
+    const url = `${DIVAR_POST_API_URL}/${token}`;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { 'User-Agent': USER_AGENT },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          return '';
+        }
+        const body = (await response.json()) as DivarPostResponse;
+        return extractDescription(body);
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {
+      // اگر صفحه‌ی آگهی نیامد، متن را خالی می‌گذاریم؛
+      // امکانات آن آگهی «معلوم نیست» می‌شود، ولی آگهی دور انداخته نمی‌شود.
+      return '';
+    }
+  }
+
   // نشانی صفحه‌ی اول؛ دیوار برای صفحه‌ی اول این شکل را می‌خواهد.
   private firstPagePagination(): Record<string, unknown> {
     return {
@@ -78,4 +120,35 @@ export class DivarClient {
       },
     };
   }
+}
+
+// از صفحه‌ی آگهی، متن توضیحات را بیرون می‌کشد.
+// صفحه بخش‌بخش است؛ بخشی که تیترش «توضیحات» است، متن واقعی آگهی را دارد.
+// بقیه‌ی متن‌ها (مثل «انتشار آگهی: ...») توضیح آگهی نیستند و برداشته نمی‌شوند.
+function extractDescription(body: DivarPostResponse): string {
+  const sections = body.sections ?? [];
+  for (const section of sections) {
+    const widgets = section.widgets ?? [];
+    // در این بخش دنبال تیتر «توضیحات» می‌گردیم؛
+    // اولین متن بعد از آن تیتر، همان توضیح آگهی است.
+    let foundTitle = false;
+    for (const widget of widgets) {
+      const data = widget.data ?? {};
+      const type = String(data['@type'] ?? '');
+      // تیتر «توضیحات» در فیلد `text` (تکست) است، نه `title` (تایتل)؛
+      // هر دو را می‌پرسیم تا اگر دیوار جایش را عوض کرد، باز هم پیدا شود.
+      const label = String(data.title ?? data.text ?? '');
+      if (type.endsWith('TitleRowData') && label === 'توضیحات') {
+        foundTitle = true;
+        continue;
+      }
+      if (foundTitle && type.endsWith('DescriptionRowData')) {
+        const text = String(data.text ?? '').trim();
+        if (text.length > 0) {
+          return text.slice(0, 2000);
+        }
+      }
+    }
+  }
+  return '';
 }

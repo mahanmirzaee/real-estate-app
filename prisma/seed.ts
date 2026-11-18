@@ -45,6 +45,21 @@ async function main(): Promise<void> {
     });
     const total = await prisma.listing.count();
     console.log(`بذر دیتابیس انجام شد: ${created.count} آگهی تازه ریخته شد، در کل ${total} آگهی هست.`);
+
+    // کاربر مدیر را می‌سازیم؛ فقط اگر هنوز هیچ کاربری نیست.
+    // اگر از قبل کاربر باشد، کد تازه نمی‌سازیم تا کد ماهان عوض نشود؛
+    // کد یک بار ساخته می‌شود و هرگز خودکار عوض نمی‌شود.
+    const existingUsers = await prisma.appUser.count();
+    if (existingUsers === 0) {
+      // کد ۶ رقمی تصادفی؛ رقم اول صفر نیست تا همیشه ۶ رقم بماند.
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      await prisma.appUser.create({ data: { name: 'ماهان', code, role: 'admin' } });
+      console.log(`کاربر مدیر ساخته شد: ماهان — کد ورود: ${code}`);
+      console.log('این کد را جایی امن بنویس؛ فقط همین‌جا نشان داده می‌شود.');
+      console.log('کد در دیتابیس هم هست؛ در جدول AppUser، با pgAdmin یا Navicat می‌توانی ببینیش.');
+    } else {
+      console.log('کاربر از قبل هست؛ کد تازه ساخته نشد.');
+    }
   } finally {
     await prisma.$disconnect();
   }

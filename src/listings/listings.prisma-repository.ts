@@ -4,10 +4,20 @@
 // ولی این بار پیاده‌سازیش با دیتابیس است، نه فایل `JSON` (جیسون).
 
 import { Injectable } from '@nestjs/common';
-import { Listing as PrismaListing } from '@prisma/client';
-import { Listing } from '../fetch/listing.interface';
+import { Listing as PrismaListing, Prisma } from '@prisma/client';
+import { Listing, ListingFeatures } from '../fetch/listing.interface';
 import { PrismaService } from '../prisma/prisma.service';
+import { featuresFromJson } from './features';
 import { ListingsRepository } from './listings.repository';
+
+// امکانات را به شکل `JSON` (جیسون) خام برمی‌گرداند تا پریزما قبولش کند؛
+// اگر امکانات نبود، خالی برمی‌گردانیم تا ستون خالی بماند.
+function featuresToJson(features: ListingFeatures | null | undefined): Prisma.InputJsonValue | undefined {
+  if (!features) {
+    return undefined;
+  }
+  return JSON.parse(JSON.stringify(features)) as Prisma.InputJsonValue;
+}
 
 @Injectable()
 export class PrismaListingsRepository extends ListingsRepository {
@@ -32,6 +42,10 @@ export class PrismaListingsRepository extends ListingsRepository {
       imageUrl: row.imageUrl ?? null,
       rahnAmount: row.rahnAmount ?? null,
       ejareAmount: row.ejareAmount ?? null,
+      // متن کامل آگهی؛ اگر وقتی ذخیره شد متن نداشت (آگهی قدیمی)، خالی است.
+      description: row.description ?? null,
+      // امکانات را از ستون `JSON` (جیسون) برمی‌گردانیم؛ اگر شکلش درست نبود، خالی است.
+      features: featuresFromJson(row.features),
     };
   }
 
@@ -71,6 +85,8 @@ export class PrismaListingsRepository extends ListingsRepository {
           imageUrl: listing.imageUrl ?? null,
           rahnAmount: listing.rahnAmount ?? null,
           ejareAmount: listing.ejareAmount ?? null,
+          description: listing.description ?? null,
+          features: featuresToJson(listing.features),
         })),
       }),
     ]);
@@ -82,10 +98,14 @@ export class PrismaListingsRepository extends ListingsRepository {
   // نوشته می‌شود — در همان تراکنش، کنار خود آگهی؛ یعنی یا هر دو با هم نوشته می‌شوند
   // یا هیچ‌کدام. اگر وسط کار برنامه خاموش شود، هیچ آگهی‌ای بدون رویداد نمی‌ماند
   // و هیچ رویدادی هم برای آگهی‌ای که ذخیره نشده، ساخته نمی‌شود.
-  async upsert(incoming: Listing[]): Promise<{ added: number; total: number }> {
+  async upsert(incoming: Listing[]): Promise<{
+    added: number;
+    addedBySource: { divar: number; sheypoor: number };
+    total: number;
+  }> {
     if (incoming.length === 0) {
       const total = await this.prisma.listing.count();
-      return { added: 0, total };
+      return { added: 0, addedBySource: { divar: 0, sheypoor: 0 }, total };
     }
     // اول می‌پرسیم کدام شناسه‌ها از قبل در انبار هستند؛
     // فقط آگهی‌هایی که از قبل نیستند، «تازه» حساب می‌شوند و رویداد می‌گیرند.
@@ -113,6 +133,8 @@ export class PrismaListingsRepository extends ListingsRepository {
           imageUrl: listing.imageUrl ?? null,
           rahnAmount: listing.rahnAmount ?? null,
           ejareAmount: listing.ejareAmount ?? null,
+          description: listing.description ?? null,
+          features: featuresToJson(listing.features),
         })),
         skipDuplicates: true,
       });
@@ -144,6 +166,21 @@ export class PrismaListingsRepository extends ListingsRepository {
           });
         }
       }
+      // آگهی‌هایی که از قبل بودند ولی متن کامل نداشتند (چون وقتی ذخیره شدند
+      // هنوز متن گرفته نمی‌شد)، حالا که دوباره دیده شدند و متن تازه‌شان هست،
+      // متن و امکاناتشان را می‌گیرند تا کارت‌های قدیمی هم آیکون داشته باشند.
+      // فقط وقتی متن تازه هست چیزی عوض می‌شود؛ متن خالی، جای متن قبلی را نمی‌گیرد.
+      for (const listing of incoming) {
+        if (listing.description) {
+          await tx.listing.updateMany({
+            where: { token: listing.token, description: null },
+            data: {
+              description: listing.description,
+              features: featuresToJson(listing.features),
+            },
+          });
+        }
+      }
       // برای هر آگهی تازه، یک رویداد در دفتر اوت‌باکس می‌نویسیم؛
       // خود آگهی کامل، داخل رویداد هم هست تا خواننده لازم نباشد دوباره بپرسد.
       await tx.outboxEvent.createMany({
@@ -167,6 +204,12 @@ export class PrismaListingsRepository extends ListingsRepository {
       return result;
     });
     const total = await this.prisma.listing.count();
-    return { added: created.count, total };
+    // آگهی‌های تازه‌ای که واقعاً اضافه شدند، به تفکیک منبع؛
+    // همان لیست «تازه» است که قبل از نوشتن جدا کرده بودیم.
+    const addedBySource = { divar: 0, sheypoor: 0 };
+    for (const listing of fresh) {
+      addedBySource[listing.source]++;
+    }
+    return { added: created.count, addedBySource, total };
   }
 }

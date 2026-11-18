@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<!-- صفحه‌ی «موتور جست‌وجوگر ماهان»؛ ویترین بنگاه. -->
+<!-- صفحه‌ی «موتور جست‌وجوگر ماهان» — نسخه‌ی پنجم؛ ویترین بنگاه. -->
 <!-- این صفحه فقط نمایش می‌دهد؛ همه‌ی داده‌ها را از خود برنامه می‌گیرد: -->
-<!-- لیست آگهی‌ها از /listings و اعلان‌های تازه از /notifications. -->
+<!-- لیست آگهی‌ها از /listings، اعلان‌های تازه از /notifications، وضعیت زمان‌بندی از /scheduler/status. -->
+<!-- سه ستون دارد: پنل کناری (بخش‌ها)، کارت‌های آگهی (وسط) و چت وضعیت (چپ). -->
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -11,58 +12,89 @@
 </head>
 <body>
   <header class="hero">
+    <div class="hero-top">
+      <div class="greeting">
+        <span id="greeting-text">سلام 👋</span>
+      </div>
+      <button id="logout" class="btn ghost">خروج</button>
+    </div>
     <h1>🔍 موتور جست‌وجوگر ماهان</h1>
     <p class="subtitle">آگهی‌های شخصی دیوار و شیپور — محله‌های مهران، جلفا و دبستان</p>
+    <div class="timer-bar">
+      <span id="timer">تازه‌سازی بعدی: …</span>
+      <button id="refresh" class="btn gold">🔄 تازه‌سازی</button>
+    </div>
   </header>
 
-  <main>
-    <!-- بخش آگهی‌های تازه؛ از دفتر اعلان‌ها می‌آید و با دکمه‌ی «خوانده شد» خالی می‌شود. -->
-    <section class="panel" id="new-panel">
-      <div class="panel-head">
-        <h2>🆕 آگهی‌های جدید</h2>
-        <button id="read-all" class="btn gold">خوانده شد ✓</button>
-      </div>
-      <p id="new-empty" class="empty">آگهی تازه‌ی خوانده‌نشده‌ای نیست.</p>
-      <div id="new-list" class="cards"></div>
-    </section>
+  <div class="layout">
+    <!-- پنل کناری؛ بخش‌ها همین‌جا انتخاب می‌شوند و همان صفحه عوض می‌شود؛ صفحه‌ی جدا باز نمی‌شود. -->
+    <aside class="sidebar">
+      <h2>بخش‌ها</h2>
+      <nav id="sections">
+        <button data-view="all" class="side-btn active">🏠 همه‌ی آگهی‌ها</button>
+        <button data-view="rent-residential" class="side-btn">🏡 اجاره مسکونی</button>
+        <button data-view="rent-office" class="side-btn">🏢 اجاره اداری</button>
+        <button data-view="buy-residential" class="side-btn">🔑 خرید مسکونی</button>
+        <button data-view="buy-office" class="side-btn">🗝️ خرید دفترکار</button>
+        <button data-view="budget" class="side-btn">💰 سرچ بودجه</button>
+        <button data-view="new" class="side-btn">🆕 آگهی‌های جدید <span id="new-count" class="new-count"></span></button>
+      </nav>
+    </aside>
 
-    <!-- بخش جست‌وجو بر اساس بودجه‌ی رهن؛ دو عدد می‌گیرد و آگهی‌هایی را می‌آورد -->
-    <!-- که «معادل رهن کامل» آن‌ها زیر سقف باشد — یعنی رهن + اجاره‌ای که به رهن برگشته است. -->
-    <section class="panel" id="budget-panel">
-      <h2>💰 جست‌وجو بر اساس بودجه</h2>
-      <p class="hint">رهن کامل مورد نظر و حداکثر رهن را بده؛ آگهی‌هایی می‌آیند که معادل رهن کامل آن‌ها زیر سقف باشد. هر ترکیبی که به هدف برسد پیدا می‌شود؛ مثلاً رهن ۱ میلیارد + اجاره‌ی ۳۰ میلیون، معادل رهن کامل ۲ میلیارد است.</p>
-      <div class="budget-form">
-        <label>
-          رهن کامل مورد نظر (تومان)
-          <input id="budget-target" type="number" value="2000000000" min="1" step="1000000">
-        </label>
-        <label>
-          حداکثر رهن (تومان)
-          <input id="budget-max" type="number" value="2500000000" min="1" step="1000000">
-        </label>
-        <button id="budget-search" class="btn gold">🔍 جست‌وجو</button>
-      </div>
-      <p id="budget-status" class="status"></p>
-      <div id="budget-list" class="cards"></div>
-    </section>
-
-    <!-- نوار فیلتر؛ اینجا جای همه‌ی فیلترهاست. -->
-    <!-- فعلاً فقط منبع (همه، دیوار، شیپور) اینجاست؛ -->
-    <!-- در قدم بعد، همین‌جا دکمه‌های محله و کلید «رهن/خرید» هم اضافه می‌شوند. -->
-    <section class="panel">
-      <div class="toolbar filter-bar" id="filter-bar">
-        <div class="filters" id="filters">
-          <button data-source="all" class="filter-btn active">همه</button>
-          <button data-source="divar" class="filter-btn">دیوار</button>
-          <button data-source="sheypoor" class="filter-btn">شیپور</button>
+    <main>
+      <section class="panel">
+        <div class="panel-head">
+          <h2 id="view-title">همه‌ی آگهی‌ها</h2>
+          <span id="count" class="count"></span>
         </div>
-        <button id="refresh" class="btn gold">🔄 تازه‌سازی</button>
-      </div>
-      <p id="status" class="status"></p>
-      <p id="count" class="count"></p>
-      <div id="list" class="cards"></div>
-    </section>
-  </main>
+
+        <!-- جست‌وجو بر اساس بودجه؛ فقط وقتی بخش «سرچ بودجه» انتخاب شد دیده می‌شود. -->
+        <div id="budget-form" class="budget-form" hidden>
+          <label>
+            رهن کامل مورد نظر (تومان)
+            <input id="budget-target" type="number" value="2000000000" min="1" step="1000000">
+          </label>
+          <label>
+            حداکثر رهن (تومان)
+            <input id="budget-max" type="number" value="2500000000" min="1" step="1000000">
+          </label>
+          <button id="budget-search" class="btn gold">🔍 جست‌وجو</button>
+          <p class="hint">رهن کامل مورد نظر و حداکثر رهن را بده؛ آگهی‌هایی می‌آیند که معادل رهن کامل آن‌ها زیر سقف باشد. هر ترکیبی که به هدف برسد پیدا می‌شود؛ مثلاً رهن ۱ میلیارد + اجاره‌ی ۳۰ میلیون، معادل رهن کامل ۲ میلیارد است.</p>
+          <p id="budget-status" class="status"></p>
+        </div>
+
+        <!-- دکمه‌ی «خوانده شد»؛ فقط در بخش «آگهی‌های جدید» دیده می‌شود. -->
+        <div id="new-actions" hidden>
+          <button id="read-all" class="btn gold">خوانده شد ✓</button>
+          <p class="hint">آگهی‌هایی که بعد از آخرین تازه‌سازی اضافه شده‌اند و هنوز خوانده نشده‌اند.</p>
+        </div>
+
+        <!-- فیلترهای سریع؛ منبع و زمین. در بخش بودجه نیست چون آن بخش از سرور می‌آید. -->
+        <div id="quick-filters" class="toolbar filter-bar">
+          <div class="filters" id="filters">
+            <button data-source="all" class="filter-btn active">همه</button>
+            <button data-source="divar" class="filter-btn">دیوار</button>
+            <button data-source="sheypoor" class="filter-btn">شیپور</button>
+          </div>
+          <button id="land-chip" class="filter-btn chip">🌍 زمین</button>
+        </div>
+
+        <p id="status" class="status"></p>
+        <div id="list" class="cards-grid"></div>
+        <p id="empty" class="empty" hidden>آگهی‌ای نیست.</p>
+
+        <!-- صفحه‌بندی؛ هر صفحه ۱۰ آگهی. -->
+        <nav id="pager" class="pager" aria-label="صفحه‌بندی"></nav>
+      </section>
+    </main>
+
+    <!-- چت وضعیت؛ هر تازه‌سازی یک پیام می‌گذارد: چند تا تازه، از کجا، در کل چند تا. -->
+    <!-- این چت هوش مصنوعی نیست؛ فقط پیام‌های آماده‌ی برنامه است. -->
+    <aside class="chat-panel">
+      <h2>💬 وضعیت</h2>
+      <div id="chat-messages" class="chat-messages"></div>
+    </aside>
+  </div>
 
   <footer>
     <p>داده‌ها از دیوار و شیپور می‌آیند؛ برای تست آدرس‌ها، صفحه‌ی <a href="/api">سواگر</a> را ببین.</p>

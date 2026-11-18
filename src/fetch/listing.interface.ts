@@ -30,6 +30,20 @@ export interface Listing {
   rahnAmount?: number | null;
   // اجاره‌ی ماهانه به تومان؛ برای «رهن کامل» صفر است، نه خالی.
   ejareAmount?: number | null;
+  // متن کامل آگهی؛ برای دیوار از صفحه‌ی خود آگهی می‌آید، برای شیپور از جزئیاتش.
+  // آگهی‌های قدیمی که موقع ذخیره متن نداشتند، این فیلدشان خالی است.
+  description?: string | null;
+  // امکانات آگهی که از متن درآورده‌ایم؛ پارکینگ/انباری/آسانسور و یک ویژگی خوب.
+  // اگر متن نبود، خالی است یعنی «معلوم نیست».
+  features?: ListingFeatures | null;
+}
+
+// امکانات آگهی؛ همان چیزی که فایل `features.ts` (فیچرز) از روی متن درمی‌آورد.
+export interface ListingFeatures {
+  parking: boolean | null;
+  storage: boolean | null;
+  elevator: boolean | null;
+  highlight: string | null;
 }
 
 // شکل خام آگهی همان‌طور که سایت تحویل می‌دهد، قبل از تمیز شدن.
@@ -51,4 +65,7 @@ export interface RawPost {
   isAgency?: boolean;
   // نشانی عکس آگهی، اگر سایت عکس داده باشد؛ اگر نداده باشد، خالی می‌ماند.
   imageUrl?: string;
+  // متن کامل آگهی؛ برای دیوار از صفحه‌ی خود آگهی می‌آید، برای شیپور از جزئیاتش.
+  // اگر متن گرفته نشد، خالی می‌ماند و امکانات آگهی «معلوم نیست» می‌شود.
+  description?: string;
 }

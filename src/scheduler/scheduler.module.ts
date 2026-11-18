@@ -2,10 +2,13 @@
 // `Module` (ماژول) یعنی یک جعبه که چند تا قطعه‌ی مرتبط را کنار هم نگه می‌دارد.
 
 import { BullModule } from '@nestjs/bullmq';
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ListingsModule } from '../listings/listings.module';
 import { RefreshProcessor } from './refresh.processor';
 import { RefreshScheduler } from './refresh.scheduler';
+import { RefreshSchedulerService } from './refresh-scheduler.service';
+import { RefreshStatusService } from './refresh-status.service';
+import { SchedulerController } from './scheduler.controller';
 
 // آدرس ردیس را از `REDIS_URL` (ردیس یوآرال) می‌خوانیم؛ مثل `redis://localhost:6379`.
 // صف (`BullMQ` — بول‌ام‌کیو) خودش با همین آدرس به ردیس وصل می‌شود.
@@ -31,8 +34,14 @@ function redisConnection(): { host: string; port: number; password?: string } {
     // صف «تازه‌سازی»؛ کارهای زمان‌بندی‌شده و دستی همین‌جا صف می‌کشند.
     BullModule.registerQueue({ name: 'refresh' }),
     // برای تازه‌سازی، به سرویس آگهی‌ها نیاز داریم؛ همان سرویسی که دکمه‌ی دستی هم صدا می‌زند.
-    ListingsModule,
+    // جعبه‌ی آگهی‌ها هم به ساعت‌شمار ما نیاز دارد (دکمه‌ی دستی تایمر را از اول می‌اندازد)،
+    // پس این دو جعبه به هم اشاره می‌کنند و با `forwardRef` (فوروارد رف) به هم وصل می‌شوند.
+    forwardRef(() => ListingsModule),
   ],
-  providers: [RefreshProcessor, RefreshScheduler],
+  controllers: [SchedulerController],
+  providers: [RefreshProcessor, RefreshScheduler, RefreshSchedulerService, RefreshStatusService],
+  // ساعت‌شمار و دفترچه‌ی «آخرین تازه‌سازی» را به جعبه‌های دیگر هم می‌دهیم؛
+  // کنترلر آگهی‌ها برای دکمه‌ی دستی به هر دو نیاز دارد.
+  exports: [RefreshSchedulerService, RefreshStatusService],
 })
 export class SchedulerModule {}

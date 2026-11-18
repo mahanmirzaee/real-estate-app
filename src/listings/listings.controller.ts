@@ -1,14 +1,37 @@
 // این فایل درِ ورودی میز دوم است؛ درخواست‌های اینترنتی به آگهی‌ها از اینجا رد می‌شوند.
 // `Controller` (کنترلر) یعنی دربان؛ درخواست را می‌گیرد و جواب را پس می‌دهد.
 
-import { BadRequestException, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Inject,
+  Logger,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  forwardRef,
+} from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { RefreshSchedulerService } from '../scheduler/refresh-scheduler.service';
+import { RefreshStatusService } from '../scheduler/refresh-status.service';
 import { ListingsService } from './listings.service';
 
 @ApiTags('listings — آگهی‌ها')
 @Controller('listings')
 export class ListingsController {
-  constructor(private readonly listingsService: ListingsService) {}
+  private readonly logger = new Logger(ListingsController.name);
+
+  constructor(
+    private readonly listingsService: ListingsService,
+    // ساعت‌شمار و دفترچه‌ی «آخرین تازه‌سازی» از جعبه‌ی زمان‌بندی می‌آیند؛
+    // با `forwardRef` (فوروارد رف) وصل می‌شوند چون آن جعبه هم به ما نیاز دارد.
+    @Inject(forwardRef(() => RefreshSchedulerService))
+    private readonly schedulerService: RefreshSchedulerService,
+    @Inject(forwardRef(() => RefreshStatusService))
+    private readonly statusService: RefreshStatusService,
+  ) {}
 
   // همه‌ی آگهی‌های ذخیره‌شده؛ مثلاً /listings?district=مهران فقط آگهی‌های مهران را می‌دهد.
   @Get()
@@ -57,11 +80,24 @@ export class ListingsController {
     return listing;
   }
 
-  // یک دور تازه از دیوار می‌گیرد و تازه‌ها را ذخیره می‌کند.
+  // یک دور تازه از دیوار می‌گیرد و تازه‌ها را ذخیره می‌کند؛
+  // بعد تایمر خودکار را هم از اول می‌اندازد، یعنی تازه‌سازی بعدی ۳۰ دقیقه بعد از همین لحظه است،
+  // و نتیجه را در دفترچه‌ی «آخرین تازه‌سازی» می‌نویسد تا چت وضعیت نشانش دهد.
+  // اگر تایمر از اول انداخته نشد (مثلاً ردیس خواب بود)، خود دور تازه سالم برگشته است؛
+  // فقط تایمر سر جایش می‌ماند و با یک هشدار نوشته می‌شود.
   @Post('refresh')
   @ApiOperation({ summary: 'یک دور تازه از دیوار؛ گرفتن آگهی‌های جدید' })
   @ApiResponse({ status: 201, description: 'چند آگهی گرفته شد، چند تا تازه اضافه شد، چند تا آژانس بود' })
-  refresh() {
-    return this.listingsService.refresh();
+  async refresh() {
+    const result = await this.listingsService.refresh();
+    this.statusService.record(result);
+    try {
+      await this.schedulerService.reschedule();
+    } catch (error) {
+      this.logger.warn(
+        `تایمر تازه‌سازی از اول انداخته نشد: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    return result;
   }
 }

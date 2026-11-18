@@ -1,9 +1,10 @@
 // این فایل میز دوم بنگاه را سر هم می‌کند؛ یعنی «فیلتر و ذخیره‌ی آگهی‌ها» را.
 
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { FetchModule } from '../fetch/fetch.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
+import { SchedulerModule } from '../scheduler/scheduler.module';
 import { ListingsController } from './listings.controller';
 import { PrismaListingsRepository } from './listings.prisma-repository';
 import { ListingsRepository } from './listings.repository';
@@ -12,8 +13,10 @@ import { ListingsService } from './listings.service';
 @Module({
   // برای گرفتن آگهی تازه، به میز اول (ماژول گرفتن آگهی) نیاز داریم؛
   // برای ذخیره کردن هم به ماژول دیتابیس نیاز داریم؛
-  // برای حافظه‌ی موقت هم به ماژول ردیس نیاز داریم.
-  imports: [FetchModule, PrismaModule, RedisModule],
+  // برای حافظه‌ی موقت هم به ماژول ردیس نیاز داریم؛
+  // برای اینکه دکمه‌ی دستی تایمر را از اول بیندازد، به جعبه‌ی زمان‌بندی نیاز داریم.
+  // جعبه‌ی زمان‌بندی هم به ما نیاز دارد، پس با `forwardRef` (فوروارد رف) به هم وصل می‌شویم.
+  imports: [FetchModule, PrismaModule, RedisModule, forwardRef(() => SchedulerModule)],
   controllers: [ListingsController],
   providers: [
     ListingsService,

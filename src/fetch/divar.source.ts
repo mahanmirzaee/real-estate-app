@@ -2,8 +2,8 @@
 // حالا پشت قرارداد «منبع آگهی» است تا شیپور هم کنارش بنشیند.
 // این فایل فقط با سایت دیوار حرف می‌زند؛ مثل پیک بنگاه که می‌رود و برمی‌گردد.
 
-import { Injectable } from '@nestjs/common';
-import { CATEGORIES } from '../common/constants';
+import { Injectable, Logger } from '@nestjs/common';
+import { AGENCY_WORDS, BLACKLIST_PHRASES, CATEGORIES } from '../common/constants';
 import { DivarClient } from './divar.client';
 import { RawPost } from './listing.interface';
 import { ListingSource } from './listing-source.interface';
@@ -11,6 +11,7 @@ import { ListingSource } from './listing-source.interface';
 @Injectable()
 export class DivarSource implements ListingSource {
   readonly source = 'divar' as const;
+  private readonly logger = new Logger(DivarSource.name);
 
   constructor(private readonly divar: DivarClient) {}
 
@@ -39,7 +40,44 @@ export class DivarSource implements ListingSource {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
+    // برای آگهی‌هایی که با قانون‌های متنی شخصی به نظر می‌رسند،
+    // صفحه‌ی خود آگهی را هم می‌گیریم تا متن کاملش را داشته باشیم؛
+    // امکانات (پارکینگ، انباری، آسانسور) فقط از روی متن کامل معلوم می‌شود.
+    // آگهی آژانس را نمی‌گیریم چون دور انداخته می‌شود و گرفتن صفحه‌اش وقت تلف کردن است.
+    await this.attachDescriptions(all);
     return all;
+  }
+
+  // صفحه‌ی آگهی‌ها را سه تا سه تا می‌گیریم؛ اگر یکی نشد، آگهی را با همان اطلاعات لیست نگه می‌داریم.
+  private async attachDescriptions(posts: RawPost[]): Promise<void> {
+    const candidates = posts.filter((post) => this.looksPersonal(post));
+    let index = 0;
+    const workers = Array.from({ length: 3 }, async () => {
+      while (index < candidates.length) {
+        const post = candidates[index++];
+        post.description = await this.divar.getPostDescription(post.token);
+      }
+    });
+    await Promise.all(workers);
+    this.logger.log(`متن کامل ${candidates.length} آگهی دیوار گرفته شد.`);
+  }
+
+  // آیا آگهی با قانون‌های متنی شخصی به نظر می‌رسد؟
+  // همان قانون‌های میز دوم است (محله گفته شده باشد، کلمه‌ی آژانس نباشد، جمله‌ی ممنوعه نباشد)؛
+  // اینجا فقط برای این است که صفحه‌ی آگهی‌های آژانس را بیهوده نگیریم.
+  // تصمیم نهایی هنوز با میز دوم است و اینجا چیزی رد نمی‌شود.
+  private looksPersonal(post: RawPost): boolean {
+    const bottom = post.bottomText || '';
+    const mentionsDistrict = bottom.includes(' در ') || bottom.startsWith('در ');
+    if (!mentionsDistrict) {
+      return false;
+    }
+    if (AGENCY_WORDS.some((word) => bottom.includes(word))) {
+      return false;
+    }
+    return !BLACKLIST_PHRASES.some(
+      (phrase) => post.title.includes(phrase) || bottom.includes(phrase),
+    );
   }
 
   // از جواب شلوغ دیوار، فقط آگهی‌هایی را برمی‌داریم که شناسه و تیتر دارند.

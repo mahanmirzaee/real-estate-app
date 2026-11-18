@@ -7,11 +7,20 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { createAuthMiddleware } from './auth/auth.middleware';
+import { AuthService } from './auth/auth.service';
 
 async function bootstrap(): Promise<void> {
   // `NestExpressApplication` (نست اکسپرس اپلیکیشن) یعنی برنامه‌ی وب با موتور `Express` (اکسپرس)؛
   // این نوع برنامه بلد است فایل‌های آماده (`public`) را هم بدهد، نه فقط آدرس‌های کد.
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // نگهبان در: جلوی همه‌ی آدرس‌ها می‌ایستد و کوکی نشست را می‌بیند؛
+  // فقط صفحه‌ی ورود (`/login` — لاگین) از آن رد می‌شود.
+  // این میان‌افزار (میدل‌ویر) را جلوتر از فایل‌های آماده ثبت می‌کنیم،
+  // تا صفحه‌ی اصلی هم پشت ورود باشد، نه فقط آدرس‌های کد.
+  const authService = app.get(AuthService);
+  app.use(createAuthMiddleware(authService));
 
   // صفحه‌ی گرافیکی «موتور جست‌وجوگر ماهان» از پوشه‌ی `public` (پابلیک) داده می‌شود؛
   // فایل `index.html` روی آدرس اصلی (/) باز می‌شود و بقیه‌ی آدرس‌ها سر جایشان می‌مانند.

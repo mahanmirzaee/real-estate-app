@@ -21,6 +21,11 @@ export abstract class ListingsRepository {
   abstract saveAll(listings: Listing[]): Promise<void>;
 
   // آگهی‌های تازه را به انبار اضافه می‌کند، ولی تکراری‌ها را دوباره ذخیره نمی‌کند.
-  // برمی‌گرداند چند تا تازه اضافه شد (`added`) و حالا در کل چند تا هست (`total`).
-  abstract upsert(incoming: Listing[]): Promise<{ added: number; total: number }>;
+  // برمی‌گرداند چند تا تازه اضافه شد (`added`)، از هر منبع چند تا تازه آمد (`addedBySource`)
+  // و حالا در کل چند تا هست (`total`).
+  abstract upsert(incoming: Listing[]): Promise<{
+    added: number;
+    addedBySource: { divar: number; sheypoor: number };
+    total: number;
+  }>;
 }

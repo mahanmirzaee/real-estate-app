@@ -47,6 +47,9 @@ export class SheypoorSource implements ListingSource {
             url: String(card.attributes.url ?? `https://www.sheypoor.com/v/${card.id}`),
             // عکس آگهی را هم برمی‌داریم؛ شیپور عکس کوچک کارت را در `images.thumbnails.round` می‌دهد.
             imageUrl: card.attributes.images?.thumbnails?.round ?? undefined,
+            // متن کامل آگهی را جدا هم نگه می‌داریم تا امکانات (پارکینگ، انباری، آسانسور) از رویش دربیاید؛
+            // در `bottomText` (باتم‌تکست) هم هست تا قانون‌های متنی میز دوم روی آن کار کنند.
+            description: description || undefined,
             // اگر شیپور خودش گفته باشد فروشنده فروشگاه دارد یا مشاور معرفی کرده است، آژانس است.
             isAgency: detail
               ? detail.isShopProfile === true || !!detail.consultant

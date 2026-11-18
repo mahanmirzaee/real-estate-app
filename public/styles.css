@@ -20,7 +20,7 @@ a {
 /* سربرگ بزرگ بالای صفحه */
 .hero {
   text-align: center;
-  padding: 36px 16px 24px;
+  padding: 20px 16px 24px;
   background: linear-gradient(180deg, #1f1a10, #141414);
   border-bottom: 2px solid #d4af37;
 }
@@ -36,10 +36,147 @@ a {
   color: #c9c2ab;
 }
 
-main {
-  max-width: 960px;
+/* ردیف بالای سربرگ؛ سلام و دکمه‌ی خروج */
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1440px;
+  margin: 0 auto 8px;
+}
+
+.greeting {
+  font-size: 17px;
+  color: #e8c96a;
+  font-weight: bold;
+}
+
+/* نوار تایمر و دکمه‌ی تازه‌سازی، زیر تیتر */
+.timer-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.timer-bar #timer {
+  color: #e8c96a;
+  font-size: 16px;
+  font-weight: bold;
+  direction: ltr;
+  unicode-bidi: plaintext;
+}
+
+/* چیدمان سه ستون؛ پنل کناری راست، کارت‌ها وسط، چت وضعیت چپ */
+.layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr) 300px;
+  gap: 16px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 16px;
+  align-items: start;
+}
+
+.layout main {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+/* پنل کناری؛ دکمه‌های بخش‌ها */
+.sidebar {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 16px;
+  position: sticky;
+  top: 16px;
+}
+
+.sidebar h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  color: #e8c96a;
+}
+
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-btn {
+  cursor: pointer;
+  background: #2a2a2a;
+  color: #f0ead8;
+  border: 1px solid #555;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 15px;
+  text-align: right;
+}
+
+.side-btn:hover {
+  border-color: #d4af37;
+}
+
+.side-btn.active {
+  background: #d4af37;
+  color: #1a1a1a;
+  border-color: #d4af37;
+  font-weight: bold;
+}
+
+.new-count {
+  font-size: 13px;
+}
+
+/* چت وضعیت؛ پیام‌های برنامه، تازه‌ترین بالا */
+.chat-panel {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 16px;
+  position: sticky;
+  top: 16px;
+}
+
+.chat-panel h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  color: #e8c96a;
+}
+
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.chat-msg {
+  background: #262626;
+  border: 1px solid #3a3a3a;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.9;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-time {
+  color: #9a937c;
+  font-size: 12px;
+  direction: ltr;
+  text-align: left;
 }
 
 /* قاب هر بخش */
@@ -89,6 +226,18 @@ main {
   cursor: wait;
 }
 
+/* دکمه‌ی ساده‌ی خروج */
+.btn.ghost {
+  background: transparent;
+  color: #c9c2ab;
+  border: 1px solid #555;
+}
+
+.btn.ghost:hover {
+  border-color: #d4af37;
+  color: #e8c96a;
+}
+
 /* نوار دکمه‌های فیلتر و تازه‌سازی */
 .toolbar {
   display: flex;
@@ -116,6 +265,11 @@ main {
 
 .filter-btn:hover {
   border-color: #d4af37;
+}
+
+/* دکمه‌ی زمین؛ مثل فیلترهاست ولی جدا */
+.filter-btn.chip {
+  border-style: dashed;
 }
 
 /* فرم جست‌وجوی بودجه؛ دو ورودی عدد و دکمه‌ی جست‌وجو */
@@ -191,45 +345,43 @@ main {
   margin: 12px 0 0;
 }
 
-/* لیست کارت‌ها؛ هر کارت یک ردیف است */
-.cards {
-  display: flex;
-  flex-direction: column;
+/* شبکه‌ی کارت‌ها؛ فشرده، دو ستون وقتی جا باشد */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 14px;
   margin-top: 14px;
 }
 
-/* کارت آگهی: عکس کنار، متن کنارش */
+/* کارت آگهی؛ عکس بالا، متن پایین */
 .card {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 0;
   background: #262626;
   border: 1px solid #3a3a3a;
   border-radius: 14px;
   overflow: hidden;
-  padding: 12px;
+  padding: 0;
 }
 
 .card:hover {
   border-color: #d4af37;
 }
 
-/* عکس آگهی؛ کنار کارت */
+/* عکس آگهی؛ بالای کارت */
 .card-photo {
-  flex-shrink: 0;
-  width: 150px;
-  height: 110px;
+  width: 100%;
+  height: 150px;
   object-fit: cover;
-  border-radius: 10px;
   background: #333;
+  display: block;
 }
 
 /* اگر آگهی عکس نداشت، به‌جای عکس یک قاب طلایی با خانه می‌گذاریم؛ هیچ‌وقت عکس خراب نشان نمی‌دهیم */
 .card-photo-placeholder {
-  flex-shrink: 0;
-  width: 150px;
-  height: 110px;
-  border-radius: 10px;
+  width: 100%;
+  height: 150px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -240,11 +392,12 @@ main {
 .card-body {
   flex: 1;
   min-width: 0;
+  padding: 12px 14px 14px;
 }
 
 .card-body h3 {
   margin: 0 0 4px;
-  font-size: 17px;
+  font-size: 16px;
   color: #fdf6dd;
 }
 
@@ -258,6 +411,40 @@ main {
   margin: 0 0 8px;
   color: #c9c2ab;
   font-size: 14px;
+}
+
+/* امکانات آگهی؛ سبز یعنی دارد، قرمز یعنی ندارد، خاکستری یعنی معلوم نیست */
+.features {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.feat {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 13px;
+  border: 1px solid;
+}
+
+.feat.on {
+  color: #7ddf8e;
+  border-color: #2e7d32;
+  background: #1b3a1e;
+}
+
+.feat.off {
+  color: #ff8a80;
+  border-color: #7d2e2e;
+  background: #3a1b1b;
+}
+
+.feat.unknown {
+  color: #9a937c;
+  border-color: #555;
+  background: #2a2a2a;
 }
 
 /* برچسب‌ها: منبع آگهی و «جدید» */
@@ -289,8 +476,51 @@ main {
   font-weight: bold;
 }
 
+.badge.highlight {
+  background: #1b3a1e;
+  color: #7ddf8e;
+  border: 1px solid #2e7d32;
+}
+
 .card-link {
   font-size: 14px;
+}
+
+/* صفحه‌بندی؛ دکمه‌های شماره‌ی صفحه */
+.pager {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.pager-btn {
+  cursor: pointer;
+  background: #2a2a2a;
+  color: #f0ead8;
+  border: 1px solid #555;
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  min-width: 40px;
+}
+
+.pager-btn:hover:not(:disabled) {
+  border-color: #d4af37;
+}
+
+.pager-btn.active {
+  background: #d4af37;
+  color: #1a1a1a;
+  border-color: #d4af37;
+  font-weight: bold;
+}
+
+.pager-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 footer {
@@ -300,15 +530,41 @@ footer {
   font-size: 14px;
 }
 
-/* روی موبایل، کارت عمودی می‌شود؛ عکس بالا، متن پایین */
-@media (max-width: 600px) {
-  .card {
-    flex-direction: column;
+/* روی صفحه‌های کوچک، ستون‌ها زیر هم می‌آیند؛ اول کارت‌ها، بعد پنل کناری و چت */
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 200px minmax(0, 1fr);
   }
 
-  .card-photo,
-  .card-photo-placeholder {
-    width: 100%;
-    height: 170px;
+  .chat-panel {
+    grid-column: 1 / -1;
+    position: static;
+  }
+
+  .chat-messages {
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 700px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .sidebar nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .side-btn {
+    flex: 1 1 45%;
+  }
+
+  .cards-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
