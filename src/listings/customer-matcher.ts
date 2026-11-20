@@ -8,7 +8,7 @@ import { RAHN_TO_EJARE_RATIO } from '../convert/convert.service';
 import { Listing } from '../fetch/listing.interface';
 import { DistrictConfig } from '../settings/district-config';
 import { normalizePersianDigits } from './price-parser';
-import { equivalentRahnOf, normalizeDistrictName } from './per-meter';
+import { equivalentRahnOf, normalizeDistrictName, districtSpellings, sameDistrict } from './per-meter';
 
 // خواسته‌ی یک مشتری؛ چه از جمله درآمده باشد، چه از دفترچه‌ی مشتری‌ها.
 // سقف‌ها همه «حداکثر» اند؛ یعنی آگهی باید زیر این سقف بماند.
@@ -205,15 +205,14 @@ export function parseCustomerSentence(
   const wantsStorage = isWanted(text, 'انباری');
   const wantsElevator = isWanted(text, 'آسانسور');
 
-  // محله؛ از فهرست پیکربندی‌شده؛ «سید خندان» همان جلفاست.
+  // محله؛ از فهرست پیکربندی‌شده. متن هم مثل اسم محله تمیز می‌شود تا
+  // «سید خندان» با «سیدخندان» یکی شود، و اسم مستعار هم قبول است؛
+  // «سید خندان» همان «جلفا»ست، هر کدام که در جمله باشد.
   let district: string | null = null;
+  const cleanText = normalizeDistrictName(text);
   for (const item of districts) {
-    const name = normalizeDistrictName(item.name);
-    if (name.length > 0 && text.includes(name)) {
-      district = item.name;
-      break;
-    }
-    if (item.name === 'جلفا' && /سید ?خندان/.test(text)) {
+    const spellings = districtSpellings(item.name);
+    if (spellings.some((spelling) => spelling.length > 0 && cleanText.includes(spelling))) {
       district = item.name;
       break;
     }
@@ -334,14 +333,9 @@ export function matchListings(listings: Listing[], criteria: MatchCriteria): Mat
       continue;
     }
     // محله؛ اسم محله‌ی آگهی باید همان محله‌ی خواسته‌شده باشد.
-    if (criteria.district) {
-      const listingDistrict = normalizeDistrictName(listing.district);
-      const wanted = normalizeDistrictName(criteria.district);
-      const aliasHit =
-        criteria.district === 'جلفا' && /سیدخندان/.test(listingDistrict);
-      if (!aliasHit && !listingDistrict.includes(wanted) && !wanted.includes(listingDistrict)) {
-        continue;
-      }
+    // اسم مستعار هم قبول است؛ «جلفا» با «سید خندان» یکی است، هر دو طرف.
+    if (criteria.district && !sameDistrict(listing.district, criteria.district)) {
+      continue;
     }
     // امکانات؛ فقط «دارد» قبول است، «معلوم نیست» نه.
     if (criteria.wantsParking && listing.features?.parking !== true) {

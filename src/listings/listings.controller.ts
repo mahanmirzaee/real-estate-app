@@ -17,7 +17,7 @@ import {
 import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RefreshSchedulerService } from '../scheduler/refresh-scheduler.service';
 import { RefreshStatusService } from '../scheduler/refresh-status.service';
-import { LISTING_STATUSES, ListingsService } from './listings.service';
+import { ListingsService } from './listings.service';
 
 @ApiTags('listings — آگهی‌ها')
 @Controller('listings')
@@ -79,33 +79,6 @@ export class ListingsController {
       throw new BadRequestException('جمله‌ی مشتری را بنویس');
     }
     return this.listingsService.findByCustomerText(text);
-  }
-
-  // وضعیت و یادداشت ماهان روی یک آگهی؛ وضعیت خالی یعنی پاک کردن وضعیت و یادداشت.
-  // وضعیت با تازه‌سازی پاک نمی‌شود.
-  @Post(':token/status')
-  @ApiOperation({ summary: 'ثبت وضعیت و یادداشت روی یک آگهی' })
-  @ApiResponse({ status: 201, description: 'وضعیت و یادداشت ثبت شد' })
-  @ApiResponse({ status: 400, description: 'وضعیت درست نیست' })
-  @ApiResponse({ status: 404, description: 'آگهی پیدا نشد' })
-  async setStatus(
-    @Param('token') token: string,
-    @Body() body: { status?: string | null; note?: string | null },
-  ) {
-    const status = body?.status === undefined ? null : body.status;
-    if (status !== null && !(LISTING_STATUSES as readonly string[]).includes(String(status))) {
-      throw new BadRequestException(
-        'وضعیت باید یکی از این‌ها باشد: زنگ زدم، بازدید رفت، معامله شد، رد شد',
-      );
-    }
-    try {
-      return await this.listingsService.setStatus(token, status, body?.note);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(error instanceof Error ? error.message : 'وضعیت ثبت نشد');
-    }
   }
 
   // یک آگهی با شناسه‌اش؛ مثلاً /listings/AXvPb7p1

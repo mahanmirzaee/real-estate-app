@@ -1,8 +1,10 @@
-// مغز صفحه‌ی «موتور جست‌وجوگر ماهان» — نسخه‌ی ۵٫۱؛ با جاوااسکریپت ساده، بدون هیچ کتابخانه‌ای.
+// مغز صفحه‌ی «موتور جست‌وجوگر ماهان» — نسخه‌ی ۵٫۲؛ با جاوااسکریپت ساده، بدون هیچ کتابخانه‌ای.
 // کارش: آگهی‌ها را از برنامه می‌گیرد، کارت می‌سازد، تایمر تازه‌سازی را نشان می‌دهد
 // و بعد از هر تازه‌سازی، یک پیام در چت وضعیت می‌گذارد.
-// نسخه‌ی ۵٫۱ اضافه می‌کند: مشتری‌یاب، دفترچه‌ی مشتری‌ها، محله‌های قابل‌تغییر،
-/// گالری عکس، وضعیت و یادداشت روی هر آگهی، و متری و میانگین محله روی کارت.
+// نسخه‌ی ۵٫۲: پنل کناری درختی، مشتری‌یاب تب جدا با منطق درست، سرچ بودجه صفحه‌ی جدا،
+// صفحه‌ی مشتری‌ها با برچسب «این فایل مناسب مشتری X است» زیر کارت،
+/// محله‌ها با چک‌باکس داخل نمای خرید و اجاره، تاریخ انتشار بالای کارت،
+// میانگین محله با میانه (نه میانگین حسابی) و حذف کامل وضعیت آگهی.
 
 // هر صفحه ۱۰ آگهی نشان می‌دهد.
 const PAGE_SIZE = 10;
@@ -12,28 +14,27 @@ const RAHN_RATIO = 0.03;
 
 // بخش‌های پنل کناری؛ هر بخش یک فیلتر روی همان لیست است.
 // 'rent-residential' یعنی اجاره‌ی مسکونی، 'rent-office' یعنی اجاره‌ی اداری،
-// 'buy-residential' یعنی خرید مسکونی، 'buy-office' یعنی خرید دفترکار،
+// 'buy-residential' یعنی خرید مسکونی، 'buy-office' یعنی خرید دفترکار، 'buy-land' یعنی خرید زمین،
 // 'budget' یعنی سرچ بودجه (از سرور می‌آید)، 'new' یعنی آگهی‌های جدید (خوانده‌نشده)،
-// 'match' یعنی مشتری‌یاب، 'clients' یعنی دفترچه‌ی مشتری‌ها، 'districts' یعنی محله‌ها.
+// 'match' یعنی مشتری‌یاب، 'clients' یعنی دفترچه‌ی مشتری‌ها.
 const VIEW_TITLES = {
   all: 'همه‌ی آگهی‌ها',
   'rent-residential': 'اجاره مسکونی',
   'rent-office': 'اجاره اداری',
   'buy-residential': 'خرید مسکونی',
   'buy-office': 'خرید دفترکار',
+  'buy-land': 'خرید زمین',
   budget: 'سرچ بودجه',
   new: 'آگهی‌های جدید',
   match: 'مشتری‌یاب',
   clients: 'مشتری‌ها',
-  districts: 'محله‌ها',
 };
 
-// وضعیت‌های آگهی؛ همان چهار وضعیتی که ماهان روی کارت انتخاب می‌کند.
-const STATUS_LABELS = {
-  called: 'زنگ زدم',
-  visited: 'بازدید رفت',
-  done: 'معامله شد',
-  rejected: 'رد شد',
+// برچسب نوع ملک؛ برای فرم مشتری و کارت مشتری.
+const PROPERTY_KIND_LABELS = {
+  apartment: 'مسکونی',
+  office: 'دفترکار',
+  land: 'زمین',
 };
 
 // وضعیت صفحه؛ همه‌چیز همین‌جا جمع است.
@@ -43,9 +44,8 @@ const state = {
   view: 'all', // بخش انتخاب‌شده.
   page: 1, // صفحه‌ی فعلی.
   source: 'all', // فیلتر منبع؛ 'all' یعنی همه، 'divar' یعنی فقط دیوار، 'sheypoor' یعنی فقط شیپور.
-  landOnly: false, // اگر درست باشد، فقط زمین نشان داده می‌شود.
-  district: '', // فیلتر محله؛ خالی یعنی همه‌ی محله‌ها.
-  statusFilter: '', // فیلتر وضعیت؛ خالی یعنی همه‌ی وضعیت‌ها.
+  districtsSelected: new Set(), // محله‌های تیک‌خورده در نمای خرید و اجاره؛ خالی یعنی همه‌ی محله‌ها.
+  treeOpen: { buy: true, rent: true }, // شاخه‌های باز پنل کناری؛ خرید و اجاره اول بازند.
   budgetResults: null, // نتیجه‌ی آخرین سرچ بودجه؛ خالی یعنی هنوز سرچ نشده است.
   matchResults: null, // نتیجه‌ی آخرین مشتری‌یاب؛ خالی یعنی هنوز چیزی جست‌وجو نشده است.
   matchSummary: '', // خلاصه‌ی چیزی که مشتری‌یاب از جمله فهمید.
@@ -53,7 +53,6 @@ const state = {
   clientName: '', // اسم مشتری انتخاب‌شده.
   clients: [], // مشتری‌های دفترچه.
   districts: [], // محله‌های پیکربندی‌شده؛ از تنظیمات می‌آیند.
-  newBudgetAll: true, // تیک «همه‌ی بودجه‌ها را نمایش بده» در بخش آگهی‌های جدید؛ پیش‌فرض روشن است.
   galleryIndex: {}, // عکس فعلی هر کارت در گالری؛ کلیدش شناسه‌ی آگهی است.
   nextRunAt: null, // وقتی که تازه‌سازی خودکار بعدی انجام می‌شود.
   intervalMinutes: 30, // فاصله‌ی بین دو تازه‌سازی خودکار، به دقیقه.
@@ -93,13 +92,37 @@ function formatTime(date) {
   return date.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
 }
 
-// آگهی‌ها را تازه‌ترین اول مرتب می‌کند؛ چون `fetchedAt` تاریخ گرفتن آگهی است.
+// یک تاریخ را به زبان آدم می‌نویسد؛ مثلاً «۲۹ آبان».
+// تقویم فارسی است، پس تاریخ میلادی‌ای که از برنامه می‌آید، جلالی نشان داده می‌شود.
+function formatJalaliDate(iso) {
+  if (!iso) {
+    return '';
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  try {
+    return date.toLocaleDateString('fa-IR', { day: 'numeric', month: 'long' });
+  } catch (error) {
+    return iso.slice(0, 10);
+  }
+}
+
+// تاریخ مرتب‌سازی یک آگهی؛ اول تاریخ انتشار، اگر نبود اولین دیده‌شدن.
+// آگهی‌ای که تاریخ انتشار دارد، با همان تاریخ مرتب می‌شود، نه با وقتی که ما دیدیمش.
+function sortDateOf(listing) {
+  return new Date(listing.publishedAt || listing.fetchedAt).getTime();
+}
+
+// آگهی‌ها را تازه‌ترین اول مرتب می‌کند؛ بر اساس تاریخ انتشار، وگرنه اولین دیده‌شدن.
 function newestFirst(listings) {
-  return [...listings].sort((a, b) => new Date(b.fetchedAt) - new Date(a.fetchedAt));
+  return [...listings].sort((a, b) => sortDateOf(b) - sortDateOf(a));
 }
 
 // معادل رهن کامل یک آگهی، با همان نسبت ۳٪؛ برای اجاره رهن + اجاره تقسیم بر ۰٫۰۳،
-// برای خرید قیمت فروش. اگر عددها خوانده نشده باشند، خالی است؛ حدس نمی‌زنیم.
+// برای خرید قیمت فروش. اگر رهن یا اجاره خوانده نشده باشد، خالی است؛
+// اجاره‌ی خالی صفر حساب نمی‌شود، چون «اجاره ندارد» با «اجاره‌اش معلوم نیست» فرق دارد.
 function equivalentOf(listing) {
   if (listing.category === 'apartment-sell' || listing.category === 'office-sell' || listing.category === 'plot-old') {
     return listing.saleAmount ?? null;
@@ -107,10 +130,22 @@ function equivalentOf(listing) {
   if (listing.rahnAmount === null || listing.rahnAmount === undefined) {
     return null;
   }
-  return listing.rahnAmount + (listing.ejareAmount ?? 0) / RAHN_RATIO;
+  if (listing.ejareAmount === null || listing.ejareAmount === undefined) {
+    return null;
+  }
+  return listing.rahnAmount + listing.ejareAmount / RAHN_RATIO;
 }
 
-// لیست آگهی‌های بخش انتخاب‌شده را می‌دهد؛ فیلتر منبع و زمین و محله و وضعیت هم روی آن اعمال می‌شود.
+// آیا محله‌ی این آگهی در محله‌های تیک‌خورده هست؟
+// اگر هیچ محله‌ای تیک نخورده باشد، همه‌ی محله‌ها قبول‌اند.
+function districtSelected(listing) {
+  if (state.districtsSelected.size === 0) {
+    return true;
+  }
+  return state.districtsSelected.has(listing.district);
+}
+
+// لیست آگهی‌های بخش انتخاب‌شده را می‌دهد؛ فیلتر منبع و محله هم روی آن اعمال می‌شود.
 function visibleListings() {
   const sorted = newestFirst(state.allListings);
   let list;
@@ -119,20 +154,6 @@ function visibleListings() {
     list = state.budgetResults ? [...state.budgetResults] : [];
   } else if (state.view === 'new') {
     list = sorted.filter((listing) => state.unreadTokens.has(listing.token));
-    // فیلتر بودجه‌ی آگهی‌های جدید؛ اگر تیک «همه‌ی بودجه‌ها» برداشته شده باشد و بودجه داده شده باشد،
-    // فقط آگهی‌های تازه‌ای می‌آیند که معادل رهن کامل آن‌ها زیر سقف باشد؛ با همان نسبت ۳٪.
-    if (!state.newBudgetAll) {
-      const target = Number(document.getElementById('new-budget-target').value);
-      const max = Number(document.getElementById('new-budget-max').value);
-      if (Number.isFinite(target) && target > 0 && Number.isFinite(max) && max > 0 && max >= target) {
-        list = list.filter((listing) => {
-          const equivalent = equivalentOf(listing);
-          return equivalent !== null && equivalent > 0 && equivalent <= max;
-        });
-        // نزدیک‌ترین به هدف اول.
-        list.sort((a, b) => Math.abs(equivalentOf(a) - target) - Math.abs(equivalentOf(b) - target));
-      }
-    }
   } else if (state.view === 'match') {
     list = state.matchResults ? [...state.matchResults] : [];
   } else if (state.view === 'clients') {
@@ -145,20 +166,17 @@ function visibleListings() {
     list = sorted.filter((listing) => listing.category === 'apartment-sell');
   } else if (state.view === 'buy-office') {
     list = sorted.filter((listing) => listing.category === 'office-sell');
+  } else if (state.view === 'buy-land') {
+    list = sorted.filter((listing) => listing.category === 'plot-old');
   } else {
     list = sorted;
   }
-  if (state.landOnly) {
-    list = list.filter((listing) => listing.category === 'plot-old');
-  }
-  if (state.district) {
-    list = list.filter((listing) => listing.district === state.district);
+  // در نمای خرید و اجاره، فقط محله‌های تیک‌خورده می‌آیند.
+  if (state.view.startsWith('buy-') || state.view.startsWith('rent-')) {
+    list = list.filter((listing) => districtSelected(listing));
   }
   if (state.source !== 'all') {
     list = list.filter((listing) => listing.source === state.source);
-  }
-  if (state.statusFilter) {
-    list = list.filter((listing) => listing.status === state.statusFilter);
   }
   return list;
 }
@@ -213,15 +231,20 @@ function photoHtml(listing) {
 }
 
 // یک کارت آگهی می‌سازد؛ عکس بالا، متن پایین.
+// خط اول کارت تاریخ انتشار است؛ اگر منبع تاریخ نداده باشد، «دیده‌شده» نوشته می‌شود.
 // اگر «معادل رهن کامل» داده شود، روی کارت دو خط اضافه می‌شود:
 // رهن و اجاره‌ی اصلی آگهی، و معادل رهن کامل آن — تا معلوم باشد چرا این آگهی پیدا شده است.
 // زیر آگهی هم متراژ و متری و میانگین محله می‌آید تا ماهان یک نگاه مقایسه کند.
+// اگر آگهی به درد مشتری‌ای بخورد، زیر کارت نوشته می‌شود «این فایل مناسب مشتری X است».
 function cardHtml(listing, isNew, equivalentRahn) {
   const sourceName = listing.source === 'sheypoor' ? 'شیپور' : 'دیوار';
   const newBadge = isNew ? '<span class="badge new">🆕 جدید</span>' : '';
   const belowBadge = listing.belowAverage
     ? '<span class="badge below">📉 زیر قیمت</span>'
     : '';
+  const dateLine = listing.publishedAt
+    ? `<p class="card-date">📅 انتشار: ${formatJalaliDate(listing.publishedAt)}</p>`
+    : `<p class="card-date">👁 دیده‌شده: ${formatJalaliDate(listing.fetchedAt)}</p>`;
   const equivalentLine =
     equivalentRahn === undefined
       ? ''
@@ -237,39 +260,38 @@ function cardHtml(listing, isNew, equivalentRahn) {
       </div>`
     : '';
   // متراژ و متری؛ اگر متراژ معلوم نباشد، متری هم نشان داده نمی‌شود.
-  // میانگین محله کنار متری خود کارت می‌آید تا مقایسه یک نگاه باشد.
-  const meterLine =
-    listing.areaSqm && listing.perMeter
-      ? `<p class="card-meter">متراژ: ${formatNumber(listing.areaSqm)} متر • متری ${formatNumber(Math.round(listing.perMeter))} تومان${listing.districtAveragePerMeter ? ` • میانگین ${escapeHtml(listing.district)}: ${formatNumber(Math.round(listing.districtAveragePerMeter))} تومان` : ''}</p>`
+  // میانگین محله کنار متری خود کارت می‌آید تا مقایسه یک نگاه باشد؛
+  // میانگین میانه است، نه میانگین حسابی، و تعداد آگهی‌هایش هم نوشته می‌شود.
+  // اگر آگهی‌های محله کمتر از ۳ تا باشند، به‌جای میانگین «داده کم» می‌آید.
+  let meterLine = '';
+  if (listing.areaSqm && listing.perMeter) {
+    const averagePart = listing.districtAveragePerMeter
+      ? ` • میانگین ${escapeHtml(listing.district)}: ${formatNumber(Math.round(listing.districtAveragePerMeter))} تومان (بر اساس ${formatNumber(listing.districtAverageCount ?? 0)} آگهی)`
+      : ' • میانگین محله: داده کم';
+    meterLine = `<p class="card-meter">متراژ: ${formatNumber(listing.areaSqm)} متر • متری ${formatNumber(Math.round(listing.perMeter))} تومان${averagePart}</p>`;
+  }
+  // مشتری‌هایی که این آگهی به دردشان می‌خورد؛ سمت سرور حساب شده است.
+  const matchedLine =
+    listing.matchedClients && listing.matchedClients.length > 0
+      ? `<p class="card-matched">✅ این فایل مناسب مشتری ${listing.matchedClients.map((name) => escapeHtml(name)).join('، ')} است</p>`
       : '';
-  // وضعیت و یادداشت ماهان روی این آگهی؛ با تازه‌سازی پاک نمی‌شود.
-  const statusOptions = `<option value="">وضعیت…</option>` +
-    Object.entries(STATUS_LABELS)
-      .map(([value, label]) => `<option value="${value}" ${listing.status === value ? 'selected' : ''}>${label}</option>`)
-      .join('');
-  const statusLine = `
-    <div class="card-status" data-token="${escapeHtml(listing.token)}">
-      <select class="status-select" aria-label="وضعیت آگهی">${statusOptions}</select>
-      <input class="note-input" type="text" placeholder="یادداشت…" value="${escapeHtml(listing.note ?? '')}" aria-label="یادداشت">
-      <button class="btn small status-save">ثبت</button>
-      ${listing.status ? `<span class="badge status-badge">${STATUS_LABELS[listing.status]}</span>` : ''}
-    </div>`;
   return `
     <article class="card">
       ${photoHtml(listing)}
       <div class="card-body">
+        ${dateLine}
         <h3>${escapeHtml(listing.title)}</h3>
         <p class="card-price">${escapeHtml(listing.priceText)}</p>
         ${equivalentLine}
         ${meterLine}
         <p class="card-meta">${escapeHtml(listing.district)} • ${escapeHtml(listing.categoryLabel)}</p>
         ${featuresLine}
+        ${matchedLine}
         <div class="badges">
           <span class="badge source">${sourceName}</span>
           ${newBadge}
           ${belowBadge}
         </div>
-        ${statusLine}
         <a class="card-link" href="${escapeHtml(listing.url)}" target="_blank" rel="noopener">دیدن آگهی ←</a>
       </div>
     </article>`;
@@ -277,16 +299,6 @@ function cardHtml(listing, isNew, equivalentRahn) {
 
 // صفحه را می‌کشد: عنوان بخش، کارت‌های صفحه‌ی فعلی و دکمه‌های صفحه‌بندی.
 function render() {
-  const isDistricts = state.view === 'districts';
-  document.getElementById('list').style.display = isDistricts ? 'none' : '';
-  document.getElementById('pager').style.display = isDistricts ? 'none' : '';
-  document.getElementById('empty').hidden = isDistricts;
-  if (isDistricts) {
-    document.getElementById('view-title').textContent = VIEW_TITLES[state.view];
-    document.getElementById('count').textContent = `${state.districts.length} محله`;
-    renderDistricts();
-    return;
-  }
   const list = visibleListings();
   const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   if (state.page > totalPages) {
@@ -311,7 +323,8 @@ function render() {
       ),
     )
     .join('');
-  document.getElementById('empty').hidden = list.length !== 0;
+  document.getElementById('empty').hidden =
+    (state.view === 'clients' && !state.clientName) || list.length !== 0;
 
   // عدد آگهی‌های جدید روی دکمه‌ی پنل کناری.
   const newCount = document.getElementById('new-count');
@@ -346,7 +359,10 @@ function addChatMessage(text) {
 function refreshChatMessage(result, manual) {
   const kind = manual ? 'دستی' : 'خودکار';
   const bySource = (item) => `دیوار ${item.divar}، شیپور ${item.sheypoor}`;
-  return `تازه‌سازی ${kind} تمام شد: ${result.fetched} آگهی گرفته شد (${bySource(result.fetchedBySource ?? { divar: 0, sheypoor: 0 })})؛ ${result.added} تازه اضافه شد (${bySource(result.addedBySource ?? { divar: 0, sheypoor: 0 })})؛ در کل ${result.total} آگهی هست.`;
+  const agencyPart = result.addedAgency
+    ? `؛ ${result.addedAgency} آگهی مشاور هم برای میانگین محله ذخیره شد`
+    : '';
+  return `تازه‌سازی ${kind} تمام شد: ${result.fetched} آگهی گرفته شد (${bySource(result.fetchedBySource ?? { divar: 0, sheypoor: 0 })})؛ ${result.added} تازه اضافه شد (${bySource(result.addedBySource ?? { divar: 0, sheypoor: 0 })})${agencyPart}؛ در کل ${result.total} آگهی هست.`;
 }
 
 // اگر آگهی تازه‌ای به درد مشتری‌ای خورد، چت وضعیت همان‌جا اعلام می‌کند.
@@ -402,7 +418,7 @@ async function load() {
       const data = await districtsResponse.json();
       state.districts = data.districts ?? [];
     }
-    renderDistrictChips();
+    renderDistrictPanel();
     renderClientDistrictOptions();
     renderClients();
     render();
@@ -535,7 +551,8 @@ async function searchMatch() {
   }
 }
 
-// فهرست مشتری‌های دفترچه را می‌کشد؛ هر مشتری یک دکمه‌ی «آگهی‌هایش» و یک دکمه‌ی حذف دارد.
+// فهرست مشتری‌های دفترچه را می‌کشد؛ هر مشتری یک کارت است با خواسته‌اش،
+// چند آگهی به دردش می‌خورد، یک دکمه‌ی «آگهی‌هایش» و یک دکمه‌ی حذف.
 function renderClients() {
   const box = document.getElementById('clients-list');
   if (state.clients.length === 0) {
@@ -545,6 +562,7 @@ function renderClients() {
   box.innerHTML = state.clients
     .map((client) => {
       const kindLabel = client.kind === 'buy' ? 'خرید' : 'اجاره';
+      const propertyLabel = client.propertyKind ? PROPERTY_KIND_LABELS[client.propertyKind] ?? '' : 'هر نوعی';
       const budgetLine =
         client.kind === 'buy'
           ? client.maxDeposit
@@ -563,11 +581,20 @@ function renderClients() {
       ]
         .filter(Boolean)
         .join('، ');
-      return `<div class="client-row" data-id="${client.id}">
-        <div>
-          <strong>${escapeHtml(client.name)}</strong> — ${kindLabel}${client.district ? ` • ${escapeHtml(client.district)}` : ''}
-          <br><span class="hint">${budgetLine}${wants ? ` • می‌خواهد: ${wants}` : ''}${client.note ? ` • ${escapeHtml(client.note)}` : ''}</span>
+      const matchCount = client.matchCount ?? 0;
+      const matchLine = matchCount === 0
+        ? 'هنوز آگهی مناسبی نیست'
+        : `${formatNumber(matchCount)} آگهی مناسب`;
+      return `<div class="client-card" data-id="${client.id}">
+        <div class="client-card-head">
+          <strong>${escapeHtml(client.name)}</strong>
+          <span class="badge">${kindLabel} • ${propertyLabel}</span>
         </div>
+        <p class="client-card-line">${client.district ? `📍 ${escapeHtml(client.district)}` : '📍 هر محله‌ای'}</p>
+        <p class="client-card-line">${budgetLine}</p>
+        ${wants ? `<p class="client-card-line">می‌خواهد: ${wants}</p>` : ''}
+        ${client.note ? `<p class="client-card-line hint">${escapeHtml(client.note)}</p>` : ''}
+        <p class="client-card-match">🔎 ${matchLine}</p>
         <div class="client-actions">
           <button class="btn small gold client-matches">آگهی‌هایش</button>
           <button class="btn small ghost client-delete">حذف</button>
@@ -585,35 +612,21 @@ function renderClientDistrictOptions() {
     state.districts.map((d) => `<option value="${escapeHtml(d.name)}">${escapeHtml(d.name)}</option>`).join('');
 }
 
-// دکمه‌های محله در نوار فیلتر؛ از همان محله‌های پیکربندی‌شده ساخته می‌شوند.
-function renderDistrictChips() {
-  const box = document.getElementById('district-chips');
-  const all = `<button class="filter-btn chip ${state.district === '' ? 'active' : ''}" data-district="">همه‌ی محله‌ها</button>`;
-  box.innerHTML =
-    all +
-    state.districts
-      .map(
-        (d) =>
-          `<button class="filter-btn chip ${state.district === d.name ? 'active' : ''}" data-district="${escapeHtml(d.name)}">${escapeHtml(d.name)}</button>`,
-      )
-      .join('');
-}
-
-// فهرست محله‌های بخش «محله‌ها»؛ هر محله یک دکمه‌ی حذف دارد.
-function renderDistricts() {
-  const box = document.getElementById('districts-list');
+// چک‌باکس‌های محله در نمای خرید و اجاره؛ از همان محله‌های پیکربندی‌شده ساخته می‌شوند.
+// محله‌ای که شناسه دارد، دکمه‌ی حذف هم دارد؛ محله‌ی بدون شناسه فقط برای فیلتر است.
+function renderDistrictPanel() {
+  const box = document.getElementById('district-checkboxes');
   if (state.districts.length === 0) {
     box.innerHTML = '<p class="hint">محله‌ای ثبت نشده است.</p>';
     return;
   }
   box.innerHTML = state.districts
     .map(
-      (d) => `<div class="client-row">
-        <div><strong>${escapeHtml(d.name)}</strong>${d.id ? ` — شناسه‌ی ${d.id}` : ' — بدون شناسه؛ در تازه‌سازی جست‌وجو نمی‌شود'}</div>
-        <div class="client-actions">
-          <button class="btn small ghost district-delete" data-id="${d.id ?? ''}" data-name="${escapeHtml(d.name)}">حذف</button>
-        </div>
-      </div>`,
+      (d) => `<label class="district-check">
+        <input type="checkbox" data-district="${escapeHtml(d.name)}" ${state.districtsSelected.has(d.name) ? 'checked' : ''}>
+        ${escapeHtml(d.name)}
+        ${d.id ? `<button class="btn small ghost district-delete" data-id="${d.id}" data-name="${escapeHtml(d.name)}" title="حذف محله">✕</button>` : ''}
+      </label>`,
     )
     .join('');
 }
@@ -629,6 +642,7 @@ async function addClient() {
   const body = {
     name,
     kind: document.getElementById('client-kind').value,
+    propertyKind: document.getElementById('client-property-kind').value || null,
     maxDeposit: Number(document.getElementById('client-max-deposit').value) || null,
     maxRent: Number(document.getElementById('client-max-rent').value) || null,
     district: document.getElementById('client-district').value || null,
@@ -711,50 +725,36 @@ async function addDistrict() {
   }
 }
 
-// ثبت وضعیت و یادداشت روی یک آگهی؛ با تازه‌سازی پاک نمی‌شود.
-async function saveListingStatus(token, box) {
-  const select = box.querySelector('.status-select');
-  const noteInput = box.querySelector('.note-input');
-  const statusValue = select.value || null;
-  const noteValue = noteInput.value.trim() || null;
-  try {
-    const response = await fetch(`/listings/${encodeURIComponent(token)}/status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: statusValue, note: noteValue }),
-    });
-    if (!response.ok) {
-      return;
-    }
-    const saved = await response.json();
-    const listing = state.allListings.find((item) => item.token === token);
-    if (listing) {
-      listing.status = saved.status;
-      listing.note = saved.note;
-    }
-    render();
-  } catch (error) {
-    // اگر نشد، کارت همان‌طور می‌ماند.
-  }
-}
-
 // بخش را عوض می‌کند؛ صفحه از اول می‌شود و فرم هر بخش فقط در بخش خودش دیده می‌شود.
+// پنل محله‌ها فقط در نمای خرید و اجاره دیده می‌شود.
 function setView(view) {
   state.view = view;
   state.page = 1;
-  state.landOnly = false;
-  document.getElementById('land-chip').classList.remove('active');
   document.querySelectorAll('.side-btn').forEach((item) => {
     item.classList.toggle('active', item.dataset.view === view);
   });
   document.getElementById('budget-form').hidden = view !== 'budget';
   document.getElementById('match-form').hidden = view !== 'match';
   document.getElementById('clients-section').hidden = view !== 'clients';
-  document.getElementById('districts-section').hidden = view !== 'districts';
+  document.getElementById('district-panel').hidden =
+    !(view.startsWith('buy-') || view.startsWith('rent-'));
   document.getElementById('new-actions').hidden = view !== 'new';
   document.getElementById('quick-filters').style.display =
-    view === 'budget' || view === 'districts' ? 'none' : '';
+    view === 'budget' || view === 'clients' ? 'none' : '';
   render();
+}
+
+// شاخه‌ی خرید یا اجاره را باز و بسته می‌کند.
+function toggleTree(name) {
+  state.treeOpen[name] = !state.treeOpen[name];
+  const children = document.querySelector(`[data-tree-children="${name}"]`);
+  const toggle = document.querySelector(`[data-tree="${name}"]`);
+  if (children) {
+    children.classList.toggle('closed', !state.treeOpen[name]);
+  }
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', String(state.treeOpen[name]));
+  }
 }
 
 // اسم کسی که وارد شده را می‌گیرد و سلام می‌کند.
@@ -777,6 +777,11 @@ async function loadMe() {
 
 // دکمه‌های پنل کناری.
 document.getElementById('sections').addEventListener('click', (event) => {
+  const toggle = event.target.closest('.tree-toggle');
+  if (toggle) {
+    toggleTree(toggle.dataset.tree);
+    return;
+  }
   const button = event.target.closest('.side-btn');
   if (!button) {
     return;
@@ -797,37 +802,36 @@ document.getElementById('filters').addEventListener('click', (event) => {
   render();
 });
 
-// دکمه‌های محله؛ از محله‌های پیکربندی‌شده ساخته می‌شوند.
-document.getElementById('district-chips').addEventListener('click', (event) => {
-  const button = event.target.closest('.filter-btn');
+// چک‌باکس‌های محله؛ تیک زدن یک محله، فقط همان محله را نشان می‌دهد.
+document.getElementById('district-checkboxes').addEventListener('change', (event) => {
+  const box = event.target.closest('input[type="checkbox"]');
+  if (!box) {
+    return;
+  }
+  const name = box.dataset.district;
+  if (box.checked) {
+    state.districtsSelected.add(name);
+  } else {
+    state.districtsSelected.delete(name);
+  }
+  state.page = 1;
+  render();
+});
+
+// دکمه‌ی حذف محله؛ با شناسه‌ی عددی دیوار حذف می‌شود.
+document.getElementById('district-checkboxes').addEventListener('click', async (event) => {
+  const button = event.target.closest('.district-delete');
   if (!button) {
     return;
   }
-  state.district = button.dataset.district ?? '';
-  state.page = 1;
-  renderDistrictChips();
-  render();
-});
-
-// فیلتر وضعیت؛ فقط آگهی‌هایی با همان وضعیت نشان داده می‌شوند.
-document.getElementById('status-filter').addEventListener('change', (event) => {
-  state.statusFilter = event.target.value;
-  state.page = 1;
-  render();
-});
-
-// دکمه‌ی زمین؛ فقط آگهی‌های زمین را نشان می‌دهد.
-document.getElementById('land-chip').addEventListener('click', (event) => {
-  const button = event.currentTarget;
-  state.landOnly = !state.landOnly;
-  button.classList.toggle('active', state.landOnly);
-  if (state.landOnly && state.view !== 'all') {
-    setView('all');
-    state.landOnly = true;
-    button.classList.add('active');
+  event.stopPropagation();
+  const id = button.dataset.id;
+  if (!id) {
+    return;
   }
-  state.page = 1;
-  render();
+  await fetch(`/settings/districts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  state.districtsSelected.delete(button.dataset.name);
+  await load();
 });
 
 // دکمه‌های صفحه‌بندی.
@@ -841,7 +845,7 @@ document.getElementById('pager').addEventListener('click', (event) => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-// کلیک روی کارت‌ها؛ گالری، وضعیت و یادداشت.
+// کلیک روی کارت‌ها؛ گالری.
 // کلیک روی خود عکس آگهی اصلی را باز می‌کند؛ کلیک روی دکمه‌های گالری عکس را عوض می‌کند.
 document.getElementById('list').addEventListener('click', (event) => {
   const arrow = event.target.closest('.gallery-arrow');
@@ -869,20 +873,12 @@ document.getElementById('list').addEventListener('click', (event) => {
   const photo = event.target.closest('[data-photo-link]');
   if (photo) {
     window.open(photo.dataset.photoLink, '_blank', 'noopener');
-    return;
-  }
-  const saveButton = event.target.closest('.status-save');
-  if (saveButton) {
-    const box = saveButton.closest('.card-status');
-    if (box) {
-      saveListingStatus(box.dataset.token, box);
-    }
   }
 });
 
 // دکمه‌های دفترچه‌ی مشتری‌ها؛ «آگهی‌هایش» و حذف.
 document.getElementById('clients-list').addEventListener('click', async (event) => {
-  const row = event.target.closest('.client-row');
+  const row = event.target.closest('.client-card');
   if (!row) {
     return;
   }
@@ -895,39 +891,6 @@ document.getElementById('clients-list').addEventListener('click', async (event) 
   if (event.target.closest('.client-delete')) {
     await fetch(`/clients/${id}`, { method: 'DELETE' });
     await load();
-  }
-});
-
-// دکمه‌ی حذف محله؛ با شناسه‌ی عددی دیوار حذف می‌شود.
-document.getElementById('districts-list').addEventListener('click', async (event) => {
-  const button = event.target.closest('.district-delete');
-  if (!button) {
-    return;
-  }
-  const id = button.dataset.id;
-  if (!id) {
-    return;
-  }
-  await fetch(`/settings/districts/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  await load();
-});
-
-// تیک «همه‌ی بودجه‌ها» در بخش آگهی‌های جدید؛ برداشتنش فیلتر بودجه را روشن می‌کند.
-document.getElementById('new-budget-all').addEventListener('change', (event) => {
-  state.newBudgetAll = event.target.checked;
-  state.page = 1;
-  render();
-});
-document.getElementById('new-budget-target').addEventListener('input', () => {
-  if (state.view === 'new') {
-    state.page = 1;
-    render();
-  }
-});
-document.getElementById('new-budget-max').addEventListener('input', () => {
-  if (state.view === 'new') {
-    state.page = 1;
-    render();
   }
 });
 

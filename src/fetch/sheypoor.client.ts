@@ -51,6 +51,9 @@ export interface SheypoorDetailAttributes {
   // همه‌ی عکس‌های آگهی؛ هر عکس یک نشانی بزرگ دسکتاپ و یک نشانی موبایل دارد.
   // برای گالری کارت، نشانی دسکتاپ را می‌گیریم؛ اگر نبود، موبایل.
   images?: Array<{ source?: { desktop?: string; mobile?: string } }>;
+  // وقتی آگهی در شیپور ثبت شده است؛ مثل «2026-11-09 08:11:51.3474».
+  // همین تاریخ انتشار آگهی است.
+  addedAt?: string;
 }
 
 @Injectable()

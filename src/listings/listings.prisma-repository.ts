@@ -58,6 +58,8 @@ export class PrismaListingsRepository extends ListingsRepository {
       isPersonal: row.isPersonal,
       source: row.source as 'divar' | 'sheypoor',
       fetchedAt: row.fetchedAt.toISOString(),
+      // تاریخ انتشار از منبع؛ اگر منبع تاریخ نداد، خالی است و `fetchedAt` جای آن را می‌گیرد.
+      publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
       imageUrl: row.imageUrl ?? null,
       // عکس‌های گالری؛ اگر منبع بیش از یک عکس داده باشد، همه اینجاست.
       imageUrls: stringArrayFromJson(row.imageUrls),
@@ -66,9 +68,6 @@ export class PrismaListingsRepository extends ListingsRepository {
       // قیمت فروش و متراژ؛ اگر خوانده نشده باشند، خالی‌اند.
       saleAmount: row.saleAmount ?? null,
       areaSqm: row.areaSqm ?? null,
-      // وضعیت و یادداشت را جدا پر می‌کنیم؛ اینجا خالی می‌ماند تا `findAll` پرش کند.
-      status: null,
-      note: null,
       // متن کامل آگهی؛ اگر وقتی ذخیره شد متن نداشت (آگهی قدیمی)، خالی است.
       description: row.description ?? null,
       // امکانات را از ستون `JSON` (جیسون) برمی‌گردانیم؛ اگر شکلش درست نبود، خالی است.
@@ -76,25 +75,31 @@ export class PrismaListingsRepository extends ListingsRepository {
     };
   }
 
-  // همه‌ی آگهی‌های ذخیره‌شده را برمی‌گرداند؛ قدیمی‌ها اول، تازه‌ها آخر —
-  // دقیقاً همان ترتیبی که قبلاً با فایل بود.
-  // وضعیت و یادداشت هر آگهی هم رویش می‌نشیند؛ اگر وضعیتی نبود، خالی می‌ماند.
+  // آگهی‌های شخصی ذخیره‌شده را برمی‌گرداند؛ تازه‌ترین اول،
+  // بر اساس تاریخ انتشار، و اگر تاریخ انتشار نبود بر اساس اولین دیده‌شدن.
+  // آگهی‌های مشاور اینجا نمی‌آیند.
   async findAll(): Promise<Listing[]> {
-    const [rows, statuses] = await Promise.all([
-      this.prisma.listing.findMany({
-        orderBy: [{ fetchedAt: 'asc' }, { id: 'asc' }],
-      }),
-      this.findStatuses(),
-    ]);
-    return rows.map((row) => {
-      const listing = this.toListing(row);
-      const saved = statuses.get(row.token);
-      if (saved) {
-        listing.status = saved.status;
-        listing.note = saved.note;
-      }
-      return listing;
+    const rows = await this.prisma.listing.findMany({
+      where: { isPersonal: true },
+      orderBy: [
+        { publishedAt: { sort: 'desc', nulls: 'last' } },
+        { fetchedAt: 'desc' },
+        { id: 'desc' },
+      ],
     });
+    return rows.map((row) => this.toListing(row));
+  }
+
+  // همه‌ی آگهی‌های ذخیره‌شده، شخصی و مشاور با هم؛ فقط برای میانگین قیمت محله.
+  async findAllForStats(): Promise<Listing[]> {
+    const rows = await this.prisma.listing.findMany({
+      orderBy: [
+        { publishedAt: { sort: 'desc', nulls: 'last' } },
+        { fetchedAt: 'desc' },
+        { id: 'desc' },
+      ],
+    });
+    return rows.map((row) => this.toListing(row));
   }
 
   // یک آگهی را با شناسه‌اش پیدا می‌کند؛ اگر نبود، خالی برمی‌گرداند.
@@ -103,44 +108,7 @@ export class PrismaListingsRepository extends ListingsRepository {
     if (!row) {
       return undefined;
     }
-    const listing = this.toListing(row);
-    const saved = await this.prisma.listingStatus.findUnique({ where: { token } });
-    if (saved) {
-      listing.status = saved.status;
-      listing.note = saved.note;
-    }
-    return listing;
-  }
-
-  // وضعیت و یادداشت یک آگهی را ذخیره می‌کند؛ اگر وضعیت خالی باشد، ردیفش پاک می‌شود.
-  // اگر یادداشت داده نشده باشد، یادداشت قبلی سر جایش می‌ماند.
-  async saveStatus(
-    token: string,
-    status: string | null,
-    note?: string | null,
-  ): Promise<{ token: string; status: string | null; note: string | null }> {
-    if (status === null) {
-      await this.prisma.listingStatus.deleteMany({ where: { token } });
-      return { token, status: null, note: null };
-    }
-    const existing = await this.prisma.listingStatus.findUnique({ where: { token } });
-    const nextNote = note === undefined ? (existing?.note ?? null) : note;
-    const saved = await this.prisma.listingStatus.upsert({
-      where: { token },
-      create: { token, status, note: nextNote },
-      update: { status, note: nextNote },
-    });
-    return { token, status: saved.status, note: saved.note ?? null };
-  }
-
-  // همه‌ی وضعیت‌ها و یادداشت‌ها را می‌دهد؛ کلیدشان شناسه‌ی آگهی است.
-  async findStatuses(): Promise<Map<string, { status: string; note: string | null }>> {
-    const rows = await this.prisma.listingStatus.findMany();
-    const out = new Map<string, { status: string; note: string | null }>();
-    for (const row of rows) {
-      out.set(row.token, { status: row.status, note: row.note ?? null });
-    }
-    return out;
+    return this.toListing(row);
   }
 
   // همه‌ی آگهی‌ها را ذخیره می‌کند؛ اول همه‌ی قبلی‌ها را پاک می‌کند
@@ -161,6 +129,7 @@ export class PrismaListingsRepository extends ListingsRepository {
           isPersonal: listing.isPersonal,
           source: listing.source,
           fetchedAt: new Date(listing.fetchedAt),
+          publishedAt: listing.publishedAt ? new Date(listing.publishedAt) : null,
           imageUrl: listing.imageUrl ?? null,
           imageUrls: stringArrayToJson(listing.imageUrls),
           rahnAmount: listing.rahnAmount ?? null,
@@ -186,7 +155,7 @@ export class PrismaListingsRepository extends ListingsRepository {
     total: number;
   }> {
     if (incoming.length === 0) {
-      const total = await this.prisma.listing.count();
+      const total = await this.prisma.listing.count({ where: { isPersonal: true } });
       return { added: 0, addedBySource: { divar: 0, sheypoor: 0 }, total };
     }
     // اول می‌پرسیم کدام شناسه‌ها از قبل در انبار هستند؛
@@ -212,6 +181,7 @@ export class PrismaListingsRepository extends ListingsRepository {
           isPersonal: listing.isPersonal,
           source: listing.source,
           fetchedAt: new Date(listing.fetchedAt),
+          publishedAt: listing.publishedAt ? new Date(listing.publishedAt) : null,
           imageUrl: listing.imageUrl ?? null,
           imageUrls: stringArrayToJson(listing.imageUrls),
           rahnAmount: listing.rahnAmount ?? null,
@@ -300,6 +270,17 @@ export class PrismaListingsRepository extends ListingsRepository {
         }
         await tx.listing.updateMany({ where: { ...where, OR: missing }, data });
       }
+      // آگهی‌هایی که از قبل بودند ولی تاریخ انتشار نداشتند، حالا که دوباره دیده شدند
+      // و تاریخ انتشار تازه‌شان هست، تاریخشان را می‌گیرند؛
+      // فقط وقتی تاریخ تازه هست چیزی عوض می‌شود؛ تاریخ خالی، جای تاریخ قبلی را نمی‌گیرد.
+      for (const listing of incoming) {
+        if (listing.publishedAt) {
+          await tx.listing.updateMany({
+            where: { token: listing.token, publishedAt: null },
+            data: { publishedAt: new Date(listing.publishedAt) },
+          });
+        }
+      }
       // برای هر آگهی تازه، یک رویداد در دفتر اوت‌باکس می‌نویسیم؛
       // خود آگهی کامل، داخل رویداد هم هست تا خواننده لازم نباشد دوباره بپرسد.
       await tx.outboxEvent.createMany({
@@ -322,7 +303,7 @@ export class PrismaListingsRepository extends ListingsRepository {
       });
       return result;
     });
-    const total = await this.prisma.listing.count();
+    const total = await this.prisma.listing.count({ where: { isPersonal: true } });
     // آگهی‌های تازه‌ای که واقعاً اضافه شدند، به تفکیک منبع؛
     // همان لیست «تازه» است که قبل از نوشتن جدا کرده بودیم.
     const addedBySource = { divar: 0, sheypoor: 0 };
@@ -330,5 +311,69 @@ export class PrismaListingsRepository extends ListingsRepository {
       addedBySource[listing.source]++;
     }
     return { added: created.count, addedBySource, total };
+  }
+
+  // آگهی‌های مشاور را ذخیره می‌کند؛ فقط برای میانگین قیمت محله.
+  // بدون رویداد اوت‌باکس و بدون اعلان؛ و «اضافه‌شده»‌ی تازه‌سازی فقط شخصی است،
+  // پس اینجا عدد «اضافه‌شده» برنمی‌گردد. تاریخ انتشار و عکس هم مثل آگهی شخصی
+  // برای ردیف‌هایی که از قبل هستند و خالی‌اند، پر می‌شود.
+  async upsertAgency(incoming: Listing[]): Promise<{
+    added: number;
+    addedBySource: { divar: number; sheypoor: number };
+  }> {
+    if (incoming.length === 0) {
+      return { added: 0, addedBySource: { divar: 0, sheypoor: 0 } };
+    }
+    const existing = await this.prisma.listing.findMany({
+      where: { token: { in: incoming.map((listing) => listing.token) } },
+      select: { token: true },
+    });
+    const existingTokens = new Set(existing.map((row) => row.token));
+    const fresh = incoming.filter((listing) => !existingTokens.has(listing.token));
+    const addedBySource = { divar: 0, sheypoor: 0 };
+    for (const listing of fresh) {
+      addedBySource[listing.source]++;
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.listing.createMany({
+        data: incoming.map((listing) => ({
+          token: listing.token,
+          title: listing.title,
+          priceText: listing.priceText,
+          district: listing.district,
+          category: listing.category,
+          categoryLabel: listing.categoryLabel,
+          url: listing.url,
+          isPersonal: false,
+          source: listing.source,
+          fetchedAt: new Date(listing.fetchedAt),
+          publishedAt: listing.publishedAt ? new Date(listing.publishedAt) : null,
+          imageUrl: listing.imageUrl ?? null,
+          imageUrls: stringArrayToJson(listing.imageUrls),
+          rahnAmount: listing.rahnAmount ?? null,
+          ejareAmount: listing.ejareAmount ?? null,
+          saleAmount: listing.saleAmount ?? null,
+          areaSqm: listing.areaSqm ?? null,
+          description: listing.description ?? null,
+          features: featuresToJson(listing.features),
+        })),
+        skipDuplicates: true,
+      });
+      for (const listing of incoming) {
+        if (listing.publishedAt) {
+          await tx.listing.updateMany({
+            where: { token: listing.token, publishedAt: null },
+            data: { publishedAt: new Date(listing.publishedAt) },
+          });
+        }
+        if (listing.imageUrl) {
+          await tx.listing.updateMany({
+            where: { token: listing.token, imageUrl: null },
+            data: { imageUrl: listing.imageUrl },
+          });
+        }
+      }
+    });
+    return { added: fresh.length, addedBySource };
   }
 }

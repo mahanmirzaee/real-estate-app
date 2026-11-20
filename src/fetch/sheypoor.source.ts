@@ -5,6 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SHEYPOOR_CATEGORIES, SHEYPOOR_DISTRICT_MAP, SHEYPOOR_NEIGHBOURHOOD_IDS } from '../common/constants';
 import { RawPost } from './listing.interface';
 import { FetchScope, ListingSource } from './listing-source.interface';
+import { parseSheypoorAddedAt } from './publish-date';
 import { SheypoorCard, SheypoorClient, SheypoorDetailAttributes } from './sheypoor.client';
 
 @Injectable()
@@ -63,6 +64,8 @@ export class SheypoorSource implements ListingSource {
             // متن کامل آگهی را جدا هم نگه می‌داریم تا امکانات (پارکینگ، انباری، آسانسور) از رویش دربیاید؛
             // در `bottomText` (باتم‌تکست) هم هست تا قانون‌های متنی میز دوم روی آن کار کنند.
             description: description || undefined,
+            // تاریخ انتشار از جزئیات شیپور (`addedAt` — ادد ات)؛ اگر جزئیات نیامد، خالی می‌ماند.
+            publishedAt: detail?.addedAt ? parseSheypoorAddedAt(detail.addedAt) ?? undefined : undefined,
             // اگر شیپور خودش گفته باشد فروشنده فروشگاه دارد یا مشاور معرفی کرده است، آژانس است.
             isAgency: detail
               ? detail.isShopProfile === true || !!detail.consultant

@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<!-- صفحه‌ی «موتور جست‌وجوگر ماهان» — نسخه‌ی ۵٫۱؛ ویترین بنگاه. -->
+<!-- صفحه‌ی «موتور جست‌وجوگر ماهان» — نسخه‌ی ۵٫۲؛ ویترین بنگاه. -->
 <!-- این صفحه فقط نمایش می‌دهد؛ همه‌ی داده‌ها را از خود برنامه می‌گیرد: -->
 <!-- لیست آگهی‌ها از /listings، اعلان‌های تازه از /notifications، وضعیت زمان‌بندی از /scheduler/status. -->
 <!-- سه ستون دارد: پنل کناری (بخش‌ها)، کارت‌های آگهی (وسط) و چت وضعیت (چپ). -->
+<!-- پنل کناری درختی است، مثل سایت دیوار: خرید و اجاره هر کدام باز می‌شوند -->
+<!-- و زیرشان مسکونی و دفترکار و زمین می‌آید. -->
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -28,19 +30,30 @@
 
   <div class="layout">
     <!-- پنل کناری؛ بخش‌ها همین‌جا انتخاب می‌شوند و همان صفحه عوض می‌شود؛ صفحه‌ی جدا باز نمی‌شود. -->
+    <!-- خرید و اجاره شاخه‌اند؛ با کلیک روی اسمشان باز و بسته می‌شوند. -->
     <aside class="sidebar">
       <h2>بخش‌ها</h2>
       <nav id="sections">
         <button data-view="all" class="side-btn active">🏠 همه‌ی آگهی‌ها</button>
-        <button data-view="rent-residential" class="side-btn">🏡 اجاره مسکونی</button>
-        <button data-view="rent-office" class="side-btn">🏢 اجاره اداری</button>
-        <button data-view="buy-residential" class="side-btn">🔑 خرید مسکونی</button>
-        <button data-view="buy-office" class="side-btn">🗝️ خرید دفترکار</button>
-        <button data-view="budget" class="side-btn">💰 سرچ بودجه</button>
+        <div class="tree">
+          <button class="tree-toggle" data-tree="buy" aria-expanded="true">🔑 خرید <span class="tree-arrow">▾</span></button>
+          <div class="tree-children" data-tree-children="buy">
+            <button data-view="buy-residential" class="side-btn tree-child">مسکونی</button>
+            <button data-view="buy-office" class="side-btn tree-child">دفترکار</button>
+            <button data-view="buy-land" class="side-btn tree-child">زمین</button>
+          </div>
+        </div>
+        <div class="tree">
+          <button class="tree-toggle" data-tree="rent" aria-expanded="true">🏡 اجاره <span class="tree-arrow">▾</span></button>
+          <div class="tree-children" data-tree-children="rent">
+            <button data-view="rent-residential" class="side-btn tree-child">مسکونی</button>
+            <button data-view="rent-office" class="side-btn tree-child">دفترکار</button>
+          </div>
+        </div>
         <button data-view="new" class="side-btn">🆕 آگهی‌های جدید <span id="new-count" class="new-count"></span></button>
         <button data-view="match" class="side-btn">🔎 مشتری‌یاب</button>
+        <button data-view="budget" class="side-btn">💰 سرچ بودجه</button>
         <button data-view="clients" class="side-btn">📒 مشتری‌ها</button>
-        <button data-view="districts" class="side-btn">📍 محله‌ها</button>
       </nav>
     </aside>
 
@@ -51,7 +64,7 @@
           <span id="count" class="count"></span>
         </div>
 
-        <!-- جست‌وجو بر اساس بودجه؛ فقط وقتی بخش «سرچ بودجه» انتخاب شد دیده می‌شود. -->
+        <!-- جست‌وجو بر اساس بودجه؛ صفحه‌ی خودش است، نه بخشی از صفحه‌ی دیگر. -->
         <div id="budget-form" class="budget-form" hidden>
           <label>
             رهن کامل مورد نظر (تومان)
@@ -95,6 +108,15 @@
               </select>
             </label>
             <label>
+              نوع ملک
+              <select id="client-property-kind">
+                <option value="">هر نوعی</option>
+                <option value="apartment">مسکونی</option>
+                <option value="office">دفترکار</option>
+                <option value="land">زمین</option>
+              </select>
+            </label>
+            <label>
               سقف ودیعه (تومان) — برای خرید، سقف قیمت کل
               <input id="client-max-deposit" type="number" min="0" step="1000000" placeholder="مثلاً 500000000">
             </label>
@@ -121,18 +143,20 @@
           <div id="clients-list" class="clients-list"></div>
         </div>
 
-        <!-- محله‌ها؛ محله‌هایی که جست‌وجو می‌شوند. تغییر از تازه‌سازی بعدی اثر می‌کند. -->
-        <div id="districts-section" hidden>
-          <div class="budget-form">
-            <h3>📍 محله‌های جست‌وجو</h3>
-            <p class="hint">این محله‌ها در دیوار و شیپور جست‌وجو می‌شوند. اگر محله‌ای را عوض کنی، از تازه‌سازی بعدی اثر می‌کند؛ آگهی‌های قدیمی محله‌ی حذف‌شده پاک نمی‌شوند.</p>
-            <div id="districts-list" class="districts-list"></div>
+        <!-- محله‌ها؛ داخل نمای خرید و اجاره می‌آید، نه تب جدا. -->
+        <!-- چند محله را با هم می‌شود تیک زد؛ اگر هیچ‌کدام تیک نخورد، همه‌ی محله‌ها می‌آیند. -->
+        <!-- محله‌ی تازه هم همین‌جا اضافه می‌شود؛ تغییر از تازه‌سازی بعدی اثر می‌کند. -->
+        <div id="district-panel" class="district-panel" hidden>
+          <h3>📍 محله‌ها</h3>
+          <p class="hint">محله‌هایی که می‌خواهی ببینی را تیک بزن؛ اگر هیچ‌کدام تیک نخورد، همه‌ی محله‌ها می‌آیند.</p>
+          <div id="district-checkboxes" class="district-checkboxes"></div>
+          <div class="district-add">
             <label>
               اسم محله
               <input id="district-name" type="text" placeholder="مثلاً نارمک">
             </label>
             <label>
-              شناسه‌ی عددی محله در دیوار (اختیاری)
+              شناسه‌ی عددی محله در دیوار
               <input id="district-id" type="number" min="1" step="1" placeholder="مثلاً 95">
             </label>
             <button id="district-add" class="btn gold">➕ اضافه کن</button>
@@ -141,43 +165,19 @@
           </div>
         </div>
 
-        <!-- دکمه‌ی «خوانده شد» و فیلتر بودجه‌ی آگهی‌های جدید؛ فقط در بخش «آگهی‌های جدید» دیده می‌شود. -->
+        <!-- دکمه‌ی «خوانده شد»؛ فقط در بخش «آگهی‌های جدید» دیده می‌شود. -->
         <div id="new-actions" hidden>
           <button id="read-all" class="btn gold">خوانده شد ✓</button>
           <p class="hint">آگهی‌هایی که بعد از آخرین تازه‌سازی اضافه شده‌اند و هنوز خوانده نشده‌اند.</p>
-          <div class="new-budget">
-            <label class="check-line">
-              <input id="new-budget-all" type="checkbox" checked>
-              همه‌ی بودجه‌ها را نمایش بده
-            </label>
-            <label>
-              رهن کامل مورد نظر (تومان)
-              <input id="new-budget-target" type="number" min="1" step="1000000" placeholder="مثلاً 2000000000">
-            </label>
-            <label>
-              حداکثر رهن (تومان)
-              <input id="new-budget-max" type="number" min="1" step="1000000" placeholder="مثلاً 2500000000">
-            </label>
-            <p class="hint">اگر تیک بالا را برداری و بودجه بدهی، فقط آگهی‌های جدیدی می‌آیند که معادل رهن کامل آن‌ها زیر سقف باشد؛ مثل سرچ بودجه، با همان نسبت ۳٪.</p>
-          </div>
         </div>
 
-        <!-- فیلترهای سریع؛ منبع و زمین و محله و وضعیت. در بخش بودجه و محله‌ها نیست چون آن‌ها از سرور می‌آیند یا لیست نیستند. -->
+        <!-- فیلتر سریع منبع؛ در بخش بودجه و مشتری‌ها نیست چون آن‌ها از سرور می‌آیند یا لیست نیستند. -->
         <div id="quick-filters" class="toolbar filter-bar">
           <div class="filters" id="filters">
             <button data-source="all" class="filter-btn active">همه</button>
             <button data-source="divar" class="filter-btn">دیوار</button>
             <button data-source="sheypoor" class="filter-btn">شیپور</button>
           </div>
-          <button id="land-chip" class="filter-btn chip">🌍 زمین</button>
-          <div class="filters" id="district-chips"></div>
-          <select id="status-filter" class="status-filter" aria-label="فیلتر وضعیت">
-            <option value="">همه‌ی وضعیت‌ها</option>
-            <option value="called">زنگ زدم</option>
-            <option value="visited">بازدید رفت</option>
-            <option value="done">معامله شد</option>
-            <option value="rejected">رد شد</option>
-          </select>
         </div>
 
         <p id="status" class="status"></p>

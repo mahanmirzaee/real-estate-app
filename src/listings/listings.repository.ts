@@ -11,8 +11,13 @@
 import { Listing } from '../fetch/listing.interface';
 
 export abstract class ListingsRepository {
-  // همه‌ی آگهی‌های ذخیره‌شده را برمی‌گرداند؛ اگر چیزی نبود، لیست خالی می‌دهد.
+  // همه‌ی آگهی‌های شخصی ذخیره‌شده را برمی‌گرداند؛ اگر چیزی نبود، لیست خالی می‌دهد.
+  // آگهی‌های مشاور اینجا نمی‌آیند؛ آن‌ها فقط برای میانگین قیمت محله‌اند.
   abstract findAll(): Promise<Listing[]>;
+
+  // همه‌ی آگهی‌های ذخیره‌شده را برمی‌گرداند، شخصی و مشاور با هم؛
+  // فقط برای حساب میانگین قیمت محله؛ در هیچ لیست نمایشی استفاده نمی‌شود.
+  abstract findAllForStats(): Promise<Listing[]>;
 
   // یک آگهی را با شناسه‌اش پیدا می‌کند؛ اگر نبود، خالی برمی‌گرداند.
   abstract findByToken(token: string): Promise<Listing | undefined>;
@@ -22,22 +27,18 @@ export abstract class ListingsRepository {
 
   // آگهی‌های تازه را به انبار اضافه می‌کند، ولی تکراری‌ها را دوباره ذخیره نمی‌کند.
   // برمی‌گرداند چند تا تازه اضافه شد (`added`)، از هر منبع چند تا تازه آمد (`addedBySource`)
-  // و حالا در کل چند تا هست (`total`).
+  // و حالا در کل چند تا آگهی شخصی هست (`total`).
   abstract upsert(incoming: Listing[]): Promise<{
     added: number;
     addedBySource: { divar: number; sheypoor: number };
     total: number;
   }>;
 
-  // وضعیت و یادداشت ماهان روی یک آگهی را ذخیره می‌کند؛
-  // اگر وضعیت خالی باشد، وضعیت و یادداشت آن آگهی پاک می‌شود.
-  // وضعیت در جدول جداست تا تازه‌سازی هرگز پاکش نکند.
-  abstract saveStatus(
-    token: string,
-    status: string | null,
-    note?: string | null,
-  ): Promise<{ token: string; status: string | null; note: string | null }>;
-
-  // همه‌ی وضعیت‌ها و یادداشت‌ها را می‌دهد؛ کلیدشان شناسه‌ی آگهی است.
-  abstract findStatuses(): Promise<Map<string, { status: string; note: string | null }>>;
+  // آگهی‌های مشاور را ذخیره می‌کند؛ فقط برای میانگین قیمت محله.
+  // رویداد اوت‌باکس نمی‌گیرند، در لیست نمی‌آیند و در شمارش «اضافه‌شده» نیستند.
+  // برمی‌گرداند چند تا آگهی مشاور تازه اضافه شد.
+  abstract upsertAgency(incoming: Listing[]): Promise<{
+    added: number;
+    addedBySource: { divar: number; sheypoor: number };
+  }>;
 }

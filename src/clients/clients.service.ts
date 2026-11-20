@@ -18,6 +18,9 @@ export interface CreateClientInput {
   maxRent?: number | null;
   // محله‌ای که می‌خواهد؛ اگر خالی باشد یعنی هر محله‌ای.
   district?: string | null;
+  // نوع ملک؛ 'apartment' یعنی مسکونی، 'office' یعنی دفترکار، 'land' یعنی زمین.
+  // اگر خالی باشد یعنی هر نوعی.
+  propertyKind?: 'apartment' | 'office' | 'land' | null;
   // این امکانات را می‌خواهد؟ درست یعنی «می‌خواهد»، غلط یعنی «فرقی نمی‌کند».
   wantsParking?: boolean;
   wantsStorage?: boolean;
@@ -50,6 +53,12 @@ export class ClientsService {
     if (input.kind !== 'rent' && input.kind !== 'buy') {
       throw new Error('نوع مشتری باید اجاره یا خرید باشد');
     }
+    const propertyKind =
+      input.propertyKind === 'apartment' ||
+      input.propertyKind === 'office' ||
+      input.propertyKind === 'land'
+        ? input.propertyKind
+        : null;
     const amount = (value: unknown): number | null => {
       if (value === null || value === undefined || value === '') {
         return null;
@@ -67,6 +76,7 @@ export class ClientsService {
         maxDeposit: amount(input.maxDeposit),
         maxRent: input.kind === 'rent' ? amount(input.maxRent) : null,
         district: input.district ? String(input.district).trim() || null : null,
+        propertyKind,
         wantsParking: input.wantsParking === true,
         wantsStorage: input.wantsStorage === true,
         wantsElevator: input.wantsElevator === true,

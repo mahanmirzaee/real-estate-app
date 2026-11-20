@@ -1,8 +1,9 @@
-// این فایل میز دوم بنگاه است: آگهی‌های خام را می‌گیرد، آگهی آژانس را کنار می‌گذارد
-// و فقط فایل‌های شخصی را نگه می‌دارد. این فایل هیچ‌چیز از دیوار یا شیپور نمی‌داند؛
-// فقط آگهی آماده را از میز اول تحویل می‌گیرد.
+// این فایل میز دوم بنگاه است: آگهی‌های خام را می‌گیرد، شخصی‌ها را نگه می‌دارد
+// و آگهی‌های آژانس را هم برای میانگین قیمت محله ذخیره می‌کند؛
+ // آگهی آژانس در لیست و جست‌وجو و اعلان نمی‌آید، فقط قیمتش در میانگین محله شمرده می‌شود.
+// این فایل هیچ‌چیز از دیوار یا شیپور نمی‌داند؛ فقط آگهی آماده را از میز اول تحویل می‌گیرد.
 
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Client } from '@prisma/client';
 import { AGENCY_WORDS, BLACKLIST_PHRASES, DISTRICTS } from '../common/constants';
 import { RAHN_TO_EJARE_RATIO } from '../convert/convert.service';
@@ -32,11 +33,6 @@ export interface BudgetListing extends Listing {
   equivalentRahn: number;
 }
 
-// وضعیت‌هایی که ماهان می‌تواند روی یک آگهی بگذارد.
-// 'called' یعنی زنگ زدم، 'visited' یعنی بازدید رفت، 'done' یعنی معامله شد، 'rejected' یعنی رد شد.
-export const LISTING_STATUSES = ['called', 'visited', 'done', 'rejected'] as const;
-export type ListingStatusValue = (typeof LISTING_STATUSES)[number];
-
 @Injectable()
 export class ListingsService {
   private readonly logger = new Logger(ListingsService.name);
@@ -64,55 +60,27 @@ export class ListingsService {
 
   // یک دور تازه از همه‌ی منبع‌ها می‌گیرد، فیلتر می‌کند و تازه‌ها را ذخیره می‌کند؛
   // بعد هم لیست‌های روی تخته‌ی ردیس را پاک می‌کند تا دفعه‌ی بعد تازه خوانده شوند.
-  // جواب همان چهار عدد نسخه‌ی چهارم است، به‌علاوه‌ی «از هر منبع چند تا» و
-  // «کدام آگهی تازه به درد کدام مشتری می‌خورد»؛ شکل قدیمی جواب عوض نشده، فقط فیلد اضافه شده است.
+  // آگهی شخصی با رویداد اوت‌باکس ذخیره می‌شود و در لیست می‌آید؛
+  // آگهی آژانس بدون رویداد ذخیره می‌شود و فقط در میانگین قیمت محله شمرده می‌شود.
+  // «اضافه‌شده» فقط شخصی است؛ آگهی مشاور جداگانه شمرده می‌شود.
   async refresh(): Promise<RefreshResult> {
     const rawPosts = await this.fetchService.fetchAll();
     let skippedAgency = 0;
     const fresh: Listing[] = [];
+    const agencyFresh: Listing[] = [];
     for (const post of rawPosts) {
       // اگر سایت خودش گفته باشد آگهی مال آژانس است، یا متن آگهی کلمه‌ی آژانس داشته باشد،
-      // یا جمله‌ی ممنوعه‌ی ماهان را داشته باشد، کنارش می‌گذاریم.
+      // یا جمله‌ی ممنوعه‌ی ماهان را داشته باشد، آگهی مشاور است؛
+      // برای میانگین قیمت محله ذخیره‌اش می‌کنیم، ولی در لیست نمی‌آید.
       if (post.isAgency === true || !this.isPersonal(post) || this.isBlacklisted(post)) {
         skippedAgency++;
+        agencyFresh.push(this.toListing(post, false));
         continue;
       }
-      // عدد رهن و اجاره (یا قیمت فروش) را همان‌جا که آگهی تمیز می‌شود، از متن قیمت درمی‌آوریم؛
-      // اگر قیمت خوانده نشد، خالی می‌مانند و آگهی از جست‌وجوی بودجه کنار می‌ماند.
-      // متراژ را هم از تیتر و متن درمی‌آوریم تا «متری» حساب شود.
-      const parsed = parsePrice(post.priceText, post.category);
-      const fullText = `${post.title}\n${post.description ?? ''}`;
-      fresh.push({
-        token: post.token,
-        title: post.title,
-        priceText: post.priceText,
-        district: post.district,
-        category: post.category,
-        categoryLabel: post.categoryLabel,
-        url: post.url,
-        isPersonal: true,
-        source: post.source,
-        fetchedAt: new Date().toISOString(),
-        // عکس را هم با خودش می‌بریم؛ اگر عکس نبود، خالی می‌ماند.
-        imageUrl: post.imageUrl ? post.imageUrl : null,
-        // عکس‌های گالری؛ اگر منبع بیش از یک عکس داده باشد، همه اینجاست.
-        imageUrls:
-          post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : null,
-        rahnAmount: parsed.rahnAmount,
-        ejareAmount: parsed.ejareAmount,
-        // قیمت فروش فقط برای خرید؛ برای اجاره خالی است.
-        saleAmount: parsed.saleAmount,
-        // متراژ؛ اگر خوانده نشد، خالی می‌ماند و متری نشان داده نمی‌شود.
-        areaSqm: extractArea(fullText),
-        // متن کامل آگهی را هم می‌بریم؛ برای دیوار از صفحه‌ی خود آگهی آمده، برای شیپور از جزئیاتش.
-        // اگر متن نبود، خالی می‌ماند و امکانات «معلوم نیست» می‌شود.
-        description: post.description || null,
-        // امکانات را از روی متن درمی‌آوریم؛ اگر متن نبود، همه‌چیز خالی است،
-        // یعنی «معلوم نیست»، نه «ندارد» — روی کارت خاکستری نشان داده می‌شود، نه قرمز.
-        features: post.description ? extractFeatures(post.description) : null,
-      });
+      fresh.push(this.toListing(post, true));
     }
     const saved = await this.repository.upsert(fresh);
+    const savedAgency = await this.repository.upsertAgency(agencyFresh);
     // حافظه‌ی موقت را پاک می‌کنیم تا لیست بعدی از دیتابیس تازه خوانده شود.
     await this.redis.delByPrefix('listings:');
     // از هر منبع چند آگهی خام گرفته شد؛ از روی همان لیست خام می‌شماریم.
@@ -127,10 +95,52 @@ export class ListingsService {
       fetched: rawPosts.length,
       added: saved.added,
       skippedAgency,
+      addedAgency: savedAgency.added,
       total: saved.total,
       fetchedBySource,
       addedBySource: saved.addedBySource,
       clientMatches,
+    };
+  }
+
+  // یک آگهی خام را به آگهی تمیز برنامه برمی‌گرداند؛
+  // عدد رهن و اجاره (یا قیمت فروش) را از متن قیمت درمی‌آورد؛
+  // اگر قیمت خوانده نشد، خالی می‌مانند و آگهی از جست‌وجوی بودجه کنار می‌ماند.
+  // متراژ را هم از تیتر و متن درمی‌آورد تا «متری» حساب شود.
+  // تاریخ انتشار از خود منبع می‌آید؛ اگر منبع تاریخ نداد، خالی می‌ماند.
+  private toListing(post: RawPost, isPersonal: boolean): Listing {
+    const parsed = parsePrice(post.priceText, post.category);
+    const fullText = `${post.title}\n${post.description ?? ''}`;
+    return {
+      token: post.token,
+      title: post.title,
+      priceText: post.priceText,
+      district: post.district,
+      category: post.category,
+      categoryLabel: post.categoryLabel,
+      url: post.url,
+      isPersonal,
+      source: post.source,
+      fetchedAt: new Date().toISOString(),
+      // تاریخ انتشار از منبع؛ اگر منبع تاریخ نداد، خالی است و `fetchedAt` جای آن را می‌گیرد.
+      publishedAt: post.publishedAt ?? null,
+      // عکس را هم با خودش می‌بریم؛ اگر عکس نبود، خالی می‌ماند.
+      imageUrl: post.imageUrl ? post.imageUrl : null,
+      // عکس‌های گالری؛ اگر منبع بیش از یک عکس داده باشد، همه اینجاست.
+      imageUrls:
+        post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : null,
+      rahnAmount: parsed.rahnAmount,
+      ejareAmount: parsed.ejareAmount,
+      // قیمت فروش فقط برای خرید؛ برای اجاره خالی است.
+      saleAmount: parsed.saleAmount,
+      // متراژ؛ اگر خوانده نشد، خالی می‌ماند و متری نشان داده نمی‌شود.
+      areaSqm: extractArea(fullText),
+      // متن کامل آگهی را هم می‌بریم؛ برای دیوار از صفحه‌ی خود آگهی آمده، برای شیپور از جزئیاتش.
+      // اگر متن نبود، خالی می‌ماند و امکانات «معلوم نیست» می‌شود.
+      description: post.description || null,
+      // امکانات را از روی متن درمی‌آوریم؛ اگر متن نبود، همه‌چیز خالی است،
+      // یعنی «معلوم نیست»، نه «ندارد» — روی کارت خاکستری نشان داده می‌شود، نه قرمز.
+      features: post.description ? extractFeatures(post.description) : null,
     };
   }
 
@@ -196,6 +206,42 @@ export class ListingsService {
     return enriched;
   }
 
+  // روی هر آگهی سه چیز می‌گذارد: متری خودش، میانگین متری محله‌اش،
+  // و اسم مشتری‌هایی که این آگهی به دردشان می‌خورد.
+  // میانگین از همه‌ی آگهی‌ها حساب می‌شود، شخصی و مشاور با هم،
+  // ولی لیست نمایشی فقط شخصی است؛ پس آمار جدا خوانده می‌شود.
+  private async enrich(listings: Listing[]): Promise<ListingWithPerMeter[]> {
+    const districts = await this.getDistricts();
+    const stats = await this.repository.findAllForStats();
+    const enriched = enrichListings(listings, districts, stats);
+    const clients = await this.readClients();
+    if (clients.length === 0) {
+      return enriched.map((listing) => ({ ...listing, matchedClients: [] as string[] }));
+    }
+    return enriched.map((listing) => {
+      const matchedClients: string[] = [];
+      for (const client of clients) {
+        if (matchListings([listing], clientToCriteria(client)).length > 0) {
+          matchedClients.push(client.name);
+        }
+      }
+      return { ...listing, matchedClients };
+    });
+  }
+
+  // همه‌ی مشتری‌های دفترچه؛ اگر خواندنشان نشد، لیست خالی برمی‌گردد
+  // تا تطبیق بی‌صدا رد شود، نه اینکه لیست آگهی‌ها نایستد.
+  private async readClients(): Promise<Client[]> {
+    try {
+      return await this.prisma.client.findMany({ orderBy: { createdAt: 'asc' } });
+    } catch (error) {
+      this.logger.warn(
+        `خواندن مشتری‌ها نشد: ${error instanceof Error ? error.message : String(error)}؛ بدون برچسب مشتری ادامه می‌دهیم.`,
+      );
+      return [];
+    }
+  }
+
   // آگهی‌های شخصی که «معادل رهن کامل» آن‌ها زیر سقف است؛ نزدیک‌ترین به هدف اول.
   // معادل رهن کامل یعنی رهن + اجاره‌ای که با همان نسبت ۳٪ ماشین‌حساب به رهن برگشته است؛
   // پس هر ترکیبی که به هدف برسد پیدا می‌شود، نه فقط آگهی‌هایی که خود رهنشان برابر هدف است:
@@ -254,30 +300,16 @@ export class ListingsService {
     return { client, results: await this.enrich(matched) };
   }
 
-  // وضعیت و یادداشت ماهان روی یک آگهی را ذخیره می‌کند؛
-  // اگر وضعیت خالی باشد، وضعیت و یادداشت آن آگهی پاک می‌شود.
-  // وضعیت در جدول جداست و با تازه‌سازی پاک نمی‌شود.
-  async setStatus(
-    token: string,
-    status: string | null,
-    note?: string | null,
-  ): Promise<{ token: string; status: string | null; note: string | null }> {
-    if (status !== null && !(LISTING_STATUSES as readonly string[]).includes(status)) {
-      throw new Error('وضعیت باید یکی از این‌ها باشد: زنگ زدم، بازدید رفت، معامله شد، رد شد');
+  // چند آگهی به درد این مشتری می‌خورد؛ فقط عدد، بدون کارت.
+  // برای صفحه‌ی مشتری‌ها، تا کنار هر مشتری بنویسد «۱۲ آگهی مناسب».
+  // اگر مشتری نبود، خالی برمی‌گردد.
+  async countMatchesForClient(id: number): Promise<number | null> {
+    const client = await this.prisma.client.findUnique({ where: { id } });
+    if (!client) {
+      return null;
     }
-    const listing = await this.repository.findByToken(token);
-    if (!listing) {
-      throw new NotFoundException(`آگهی با شناسه‌ی ${token} پیدا نشد`);
-    }
-    const cleanNote =
-      note === undefined ? undefined : note === null ? null : String(note).trim() || null;
-    return this.repository.saveStatus(token, status, cleanNote);
-  }
-
-  // روی هر آگهی متری و میانگین محله‌اش را می‌گذارد.
-  private async enrich(listings: Listing[]): Promise<ListingWithPerMeter[]> {
-    const districts = await this.getDistricts();
-    return enrichListings(listings, districts);
+    const all = await this.repository.findAll();
+    return matchListings(all, clientToCriteria(client)).length;
   }
 
   // آگهی شخصی یعنی: در توضیحش اسم محله آمده باشد («در مهران») و کلمه‌ی آژانس نداشته باشد.
@@ -307,7 +339,9 @@ export function clientToCriteria(client: Client): MatchCriteria {
     maxDeposit: client.maxDeposit ?? null,
     maxRent: client.maxRent ?? null,
     district: client.district ?? null,
-    propertyKind: null,
+    // نوع ملک مشتری؛ اگر خالی باشد یعنی هر نوعی. پیش از این همیشه خالی بود،
+    // پس دفترکار هم به درد مشتری مسکونی می‌خورد — حالا درست شده است.
+    propertyKind: client.propertyKind as 'apartment' | 'office' | 'land' | null,
     wantsParking: client.wantsParking,
     wantsStorage: client.wantsStorage,
     wantsElevator: client.wantsElevator,

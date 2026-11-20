@@ -24,11 +24,19 @@ export class ClientsController {
   ) {}
 
   // همه‌ی مشتری‌ها؛ تازه‌ترین اول.
+  // کنار هر مشتری، چند آگهی به دردش می‌خورد هم هست (`matchCount` — مچ کانت).
   @Get()
   @ApiOperation({ summary: 'فهرست مشتری‌های دفترچه' })
   @ApiResponse({ status: 200, description: 'لیست مشتری‌ها' })
-  findAll() {
-    return this.clients.findAll();
+  async findAll() {
+    const clients = await this.clients.findAll();
+    const withCounts = await Promise.all(
+      clients.map(async (client) => ({
+        ...client,
+        matchCount: (await this.listings.countMatchesForClient(client.id)) ?? 0,
+      })),
+    );
+    return withCounts;
   }
 
   // یک مشتری تازه می‌سازد؛ اسم و نوع لازم‌اند.

@@ -62,6 +62,8 @@ export class DivarSource implements ListingSource {
         post.description = detail.description || undefined;
         // عکس‌های گالری؛ اگر صفحه عکسی نداشت، همان عکس تکی لیست می‌ماند.
         post.imageUrls = detail.imageUrls.length > 0 ? detail.imageUrls : undefined;
+        // تاریخ انتشار از صفحه‌ی آگهی؛ اگر صفحه تاریخ نداشت، خالی می‌ماند.
+        post.publishedAt = detail.publishedAt ?? undefined;
       }
     });
     await Promise.all(workers);

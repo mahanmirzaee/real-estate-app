@@ -11,6 +11,7 @@ import {
   TEHRAN_CITY_ID,
   USER_AGENT,
 } from '../common/constants';
+import { parseDivarPublishDate } from './publish-date';
 
 // شکل جوابی که دیوار برمی‌گرداند.
 export interface DivarSearchResponse {
@@ -25,13 +26,16 @@ export interface DivarPostResponse {
   }>;
 }
 
-// چیزی که از صفحه‌ی یک آگهی می‌خواهیم: متن توضیحات و همه‌ی عکس‌هایش.
+// چیزی که از صفحه‌ی یک آگهی می‌خواهیم: متن توضیحات، همه‌ی عکس‌هایش و تاریخ انتشارش.
 // عکس‌ها از ویجت گالری صفحه می‌آیند؛ اگر صفحه گالری نداشت، فقط عکس لیست می‌ماند.
+// تاریخ انتشار از متن «انتشار آگهی: ۲۲ آبان ۱۴۰۵» در همان صفحه می‌آید.
 export interface DivarPostDetail {
   // متن کامل توضیحات آگهی؛ اگر نبود، خالی است.
   description: string;
   // نشانی همه‌ی عکس‌های آگهی؛ حداکثر ۱۰ تا.
   imageUrls: string[];
+  // تاریخ انتشار به شکل `ISO` (آی‌اس‌او)؛ اگر صفحه تاریخ نداشت، خالی است.
+  publishedAt: string | null;
 }
 
 @Injectable()
@@ -107,12 +111,13 @@ export class DivarClient {
           signal: controller.signal,
         });
         if (!response.ok) {
-          return { description: '', imageUrls: [] };
+          return { description: '', imageUrls: [], publishedAt: null };
         }
         const body = (await response.json()) as DivarPostResponse;
         return {
           description: extractDescription(body),
           imageUrls: extractImageUrls(body),
+          publishedAt: extractPublishDate(body),
         };
       } finally {
         clearTimeout(timer);
@@ -120,7 +125,7 @@ export class DivarClient {
     } catch {
       // اگر صفحه‌ی آگهی نیامد، متن و عکس را خالی می‌گذاریم؛
       // امکانات آن آگهی «معلوم نیست» می‌شود، ولی آگهی دور انداخته نمی‌شود.
-      return { description: '', imageUrls: [] };
+      return { description: '', imageUrls: [], publishedAt: null };
     }
   }
 
@@ -173,6 +178,31 @@ function extractImageUrls(body: DivarPostResponse): string[] {
     }
   }
   return out;
+}
+
+// تاریخ انتشار را از صفحه‌ی آگهی درمی‌آورد؛ در صفحه یک متن هست که می‌گوید
+// «انتشار آگهی: ۲۲ آبان ۱۴۰۵، ۲۰:۴۳»؛ آن متن داخل یک فهرست ویجت است،
+// پس همه‌ی ویجت‌ها و فهرست‌هایشان را می‌گردیم تا پیداش کنیم.
+// اگر صفحه تاریخ نداشت، خالی برمی‌گردد و `fetchedAt` جای آن را می‌گیرد.
+function extractPublishDate(body: DivarPostResponse): string | null {
+  for (const section of body.sections ?? []) {
+    for (const widget of section.widgets ?? []) {
+      const data = widget.data ?? {};
+      const nested = Array.isArray((data as Record<string, unknown>).widget_list)
+        ? ((data as Record<string, unknown>).widget_list as Array<{ data?: Record<string, unknown> }>)
+        : [];
+      for (const item of nested) {
+        const text = String(item.data?.text ?? '');
+        if (text.includes('انتشار آگهی')) {
+          const parsed = parseDivarPublishDate(text);
+          if (parsed) {
+            return parsed;
+          }
+        }
+      }
+    }
+  }
+  return null;
 }
 
 // از صفحه‌ی آگهی، متن توضیحات را بیرون می‌کشد.

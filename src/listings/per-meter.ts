@@ -15,9 +15,28 @@ export interface ListingWithPerMeter extends Listing {
   // متری به تومان؛ اگر متراژ یا قیمت معلوم نباشد، خالی است.
   perMeter: number | null;
   // میانگین متری همان محله و همان نوع (اجاره یا خرید)؛ اگر آگهی دیگری در محله نباشد، خالی است.
+  // این عدد میانه است، نه میانگین حسابی؛ و فقط وقتی نشان داده می‌شود که
+  // حداقل ۳ آگهی با متراژ در آن محله و نوع باشد.
   districtAveragePerMeter: number | null;
+  // چند آگهی در میانگین محله شمرده شده است؛ کنار میانگین نشان داده می‌شود.
+  districtAverageCount: number | null;
   // آیا متری این آگهی بیش از ۱۰٪ زیر میانگین محله‌اش است؟ یعنی «زیر قیمت».
   belowAverage: boolean;
+}
+
+// میانه‌ی چند عدد؛ عدد وسط بعد از مرتب شدن.
+// اگر تعداد زوج بود، میانگین دو عدد وسط. میانه مثل میانگین حسابی نیست:
+// یک آگهی خیلی گرون یا خیلی ارزون، میانه را جابه‌جا نمی‌کند.
+export function median(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[middle];
+  }
+  return Math.round((sorted[middle - 1] + sorted[middle]) / 2);
 }
 
 // معادل رهن کامل یک آگهی اجاره؛ اگر رهن یا اجاره معلوم نباشد، خالی است.
@@ -91,6 +110,41 @@ export function resolveDistrictName(listingDistrict: string, districts: District
   return listingDistrict;
 }
 
+// همه‌ی املاهای یک محله؛ اسم اصلی و اسم‌های مستعارش، هر دو طرف.
+// مثلاً «جلفا» و «سید خندان» هر دو برمی‌گردند، هر کدام که داده شود.
+export function districtSpellings(name: string): string[] {
+  const clean = normalizeDistrictName(name);
+  const out = new Set<string>();
+  if (clean.length > 0) {
+    out.add(clean);
+  }
+  for (const [canonical, aliases] of Object.entries(DISTRICT_ALIASES)) {
+    const group = [canonical, ...aliases].map((item) => normalizeDistrictName(item));
+    if (group.includes(clean)) {
+      for (const spelling of group) {
+        out.add(spelling);
+      }
+    }
+  }
+  return [...out];
+}
+
+// آیا این دو اسم، یک محله‌اند؟ فاصله و نیم‌فاصله و پرانتز مهم نیست،
+// و اسم مستعار هم قبول است؛ «جلفا» با «سید خندان» یکی است، هر دو طرف.
+export function sameDistrict(a: string, b: string): boolean {
+  const cleanA = normalizeDistrictName(a);
+  const cleanB = normalizeDistrictName(b);
+  if (cleanA.length === 0 || cleanB.length === 0) {
+    return false;
+  }
+  if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
+    return true;
+  }
+  const spellingsA = districtSpellings(a);
+  const spellingsB = districtSpellings(b);
+  return spellingsA.some((spelling) => spellingsB.includes(spelling));
+}
+
 // نوع آگهی برای میانگین؛ 'rent' یعنی اجاره، 'buy' یعنی خرید.
 export function kindGroupOf(listing: Listing): 'rent' | 'buy' {
   return listing.category.endsWith('-rent') ? 'rent' : 'buy';
@@ -102,69 +156,100 @@ export interface DistrictAverage {
   district: string;
   // نوع؛ اجاره یا خرید.
   kind: 'rent' | 'buy';
-  // میانگین متری به تومان.
+  // میانه‌ی متری به تومان؛ میانه است، نه میانگین حسابی.
   averagePerMeter: number;
-  // چند آگهی در این میانگین شمرده شده است.
+  // چند آگهی در این میانگین شمرده شده است؛ کمتر از ۳ تا باشد، میانگینی نیست.
   count: number;
 }
 
 // میانگین متری هر محله و هر نوع را از لیست آگهی‌ها حساب می‌کند.
-// فقط آگهی‌هایی که متری دارند شمرده می‌شوند.
+// فقط آگهی‌هایی که متری دارند شمرده می‌شوند؛
+// اگر در یک محله و نوع کمتر از ۳ آگهی با متراژ باشد، میانگینی برای آن نیست،
+// چون با یکی دو آگهی نمی‌شود گفت قیمت محله چقدر است.
 export function districtAverages(
   listings: Listing[],
   districts: DistrictConfig[],
 ): DistrictAverage[] {
-  const groups = new Map<string, { sum: number; count: number }>();
+  const groups = new Map<string, number[]>();
   for (const listing of listings) {
     const perMeter = perMeterOf(listing);
     if (perMeter === null) {
       continue;
     }
     const key = `${resolveDistrictName(listing.district, districts)}|${kindGroupOf(listing)}`;
-    const group = groups.get(key) ?? { sum: 0, count: 0 };
-    group.sum += perMeter;
-    group.count++;
-    groups.set(key, group);
+    const values = groups.get(key) ?? [];
+    values.push(perMeter);
+    groups.set(key, values);
   }
   const out: DistrictAverage[] = [];
-  for (const [key, group] of groups) {
+  for (const [key, values] of groups) {
+    if (values.length < 3) {
+      continue;
+    }
+    const middle = median(values);
+    if (middle === null) {
+      continue;
+    }
     const [district, kind] = key.split('|');
     out.push({
       district,
       kind: kind as 'rent' | 'buy',
-      averagePerMeter: Math.round(group.sum / group.count),
-      count: group.count,
+      averagePerMeter: middle,
+      count: values.length,
     });
   }
   return out;
 }
 
 // روی هر آگهی سه فیلد متری می‌گذارد: متری خودش، میانگین متری محله‌اش، و «زیر قیمت» بودن.
-// «زیر قیمت» یعنی متری آگهی بیش از ۱۰٪ زیر میانگین بقیه‌ی آگهی‌های همان محله و همان نوع است؛
-// میانگین بقیه حساب می‌شود، نه میانگین با خودش، تا آگهی تنها در محله «زیر قیمت» نشود.
+// «زیر قیمت» یعنی متری آگهی بیش از ۱۰٪ زیر میانه‌ی بقیه‌ی آگهی‌های همان محله و همان نوع است؛
+// میانه‌ی بقیه حساب می‌شود، نه میانه‌ی با خودش، تا آگهی تنها در محله «زیر قیمت» نشود.
+// `statsListings` (لیست آمار) همان آگهی‌هایی‌اند که میانگین از رویشان حساب می‌شود؛
+// اگر داده نشد، همان لیست نمایشی است. در برنامه‌ی اصلی، لیست آمار همه‌ی آگهی‌هاست،
+// یعنی شخصی و مشاور با هم، ولی لیست نمایشی فقط شخصی است.
 export function enrichListings(
   listings: Listing[],
   districts: DistrictConfig[],
+  statsListings?: Listing[],
 ): ListingWithPerMeter[] {
-  const averages = districtAverages(listings, districts);
+  const stats = statsListings ?? listings;
+  const averages = districtAverages(stats, districts);
   const byKey = new Map(averages.map((item) => [`${item.district}|${item.kind}`, item]));
+  // متری‌های هر گروه، برای میانه‌ی «بقیه»؛ خود آگهی موقع حساب از لیست کنار می‌رود.
+  const groupValues = new Map<string, number[]>();
+  for (const listing of stats) {
+    const perMeter = perMeterOf(listing);
+    if (perMeter === null) {
+      continue;
+    }
+    const key = `${resolveDistrictName(listing.district, districts)}|${kindGroupOf(listing)}`;
+    const values = groupValues.get(key) ?? [];
+    values.push(perMeter);
+    groupValues.set(key, values);
+  }
   return listings.map((listing) => {
     const perMeter = perMeterOf(listing);
     const district = resolveDistrictName(listing.district, districts);
     const kind = kindGroupOf(listing);
     const average = byKey.get(`${district}|${kind}`) ?? null;
     let belowAverage = false;
-    if (perMeter !== null && average !== null && average.count >= 2) {
-      // میانگین بقیه: مجموع منهای خود آگهی، تقسیم بر بقیه.
-      const othersAverage = Math.round(
-        (average.averagePerMeter * average.count - perMeter) / (average.count - 1),
-      );
-      belowAverage = perMeter < othersAverage * 0.9;
+    if (perMeter !== null && average !== null && average.count >= 3) {
+      // میانه‌ی بقیه: یکی از متری‌های خود آگهی را از گروه برمی‌داریم و میانه‌ی بقیه را می‌گیریم.
+      const values = [...(groupValues.get(`${district}|${kind}`) ?? [])];
+      const ownIndex = values.indexOf(perMeter);
+      if (ownIndex >= 0) {
+        values.splice(ownIndex, 1);
+      }
+      const othersMedian = median(values);
+      if (othersMedian !== null) {
+        belowAverage = perMeter < othersMedian * 0.9;
+      }
     }
     return {
       ...listing,
       perMeter,
       districtAveragePerMeter: average ? average.averagePerMeter : null,
+      districtAverageCount: average ? average.count : null,
       belowAverage,
     };
   });
