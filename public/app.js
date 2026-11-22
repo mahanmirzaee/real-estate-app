@@ -56,6 +56,7 @@ const state = {
   galleryIndex: {}, // عکس فعلی هر کارت در گالری؛ کلیدش شناسه‌ی آگهی است.
   nextRunAt: null, // وقتی که تازه‌سازی خودکار بعدی انجام می‌شود.
   intervalMinutes: 30, // فاصله‌ی بین دو تازه‌سازی خودکار، به دقیقه.
+  lastAnnouncedAt: null, // وقت آخرین دوری که در چت اعلام شد؛ فقط در حافظه‌ی همین صفحه است.
   userName: '', // اسم کسی که وارد شده است.
 };
 
@@ -346,6 +347,7 @@ function render() {
 }
 
 // یک پیام در چت وضعیت می‌گذارد؛ تازه‌ترین پیام بالا می‌آید.
+// همیشه فقط ۴ پیام می‌ماند: پیام تازه می‌آید بالا و یکی از پایین حذف می‌شود.
 function addChatMessage(text) {
   const box = document.getElementById('chat-messages');
   const time = formatTime(new Date());
@@ -353,6 +355,9 @@ function addChatMessage(text) {
   div.className = 'chat-msg';
   div.innerHTML = `<span class="chat-time">${time}</span><span>${escapeHtml(text)}</span>`;
   box.prepend(div);
+  while (box.children.length > 4) {
+    box.removeChild(box.lastChild);
+  }
 }
 
 // پیام یک دور تازه‌سازی؛ از نتیجه‌ی برنامه ساخته می‌شود.
@@ -362,12 +367,16 @@ function refreshChatMessage(result, manual) {
   const agencyPart = result.addedAgency
     ? `؛ ${result.addedAgency} آگهی مشاور هم برای میانگین محله ذخیره شد`
     : '';
-  return `تازه‌سازی ${kind} تمام شد: ${result.fetched} آگهی گرفته شد (${bySource(result.fetchedBySource ?? { divar: 0, sheypoor: 0 })})؛ ${result.added} تازه اضافه شد (${bySource(result.addedBySource ?? { divar: 0, sheypoor: 0 })})${agencyPart}؛ در کل ${result.total} آگهی هست.`;
+  const changedPart =
+    result.changedPrice > 0 ? `؛ ${result.changedPrice} آگهی قیمت‌شان عوض شد` : '';
+  return `تازه‌سازی ${kind} تمام شد: ${result.fetched} آگهی گرفته شد (${bySource(result.fetchedBySource ?? { divar: 0, sheypoor: 0 })})؛ ${result.added} تازه اضافه شد (${bySource(result.addedBySource ?? { divar: 0, sheypoor: 0 })})${changedPart}${agencyPart}؛ در کل ${result.total} آگهی هست.`;
 }
 
 // اگر آگهی تازه‌ای به درد مشتری‌ای خورد، چت وضعیت همان‌جا اعلام می‌کند.
+// اگر هیچ تطابق تازه‌ای نبود، چت ساکت نمی‌ماند و می‌گوید آگهی تازه‌ای یافت نشد.
 function announceClientMatches(matches) {
   if (!matches || matches.length === 0) {
+    addChatMessage('هیچ آگهی تازه‌ای یافت نشد');
     return;
   }
   const byClient = {};
@@ -382,6 +391,40 @@ function announceClientMatches(matches) {
     const more = titles.length > 3 ? ` و ${titles.length - 3} آگهی دیگر` : '';
     addChatMessage(`این آگهی به درد مشتری ${name} می‌خوره: ${shown}${more}`);
   }
+}
+
+// نشانه‌ی آخرین دوری که در چت اعلام شد؛ فقط وقتش را نگه می‌داریم، نه پیام‌ها را.
+// اول در حافظه‌ی خود مرورگر می‌ماند تا با بستن و باز کردن صفحه هم تکرار نشود؛
+// اگر حافظه‌ی مرورگر در دسترس نبود، فقط در حافظه‌ی همین صفحه می‌ماند.
+function getAnnouncedAt() {
+  try {
+    return localStorage.getItem('chatLastAnnouncedAt');
+  } catch (error) {
+    return state.lastAnnouncedAt;
+  }
+}
+
+function setAnnouncedAt(at) {
+  state.lastAnnouncedAt = at;
+  try {
+    localStorage.setItem('chatLastAnnouncedAt', at);
+  } catch (error) {
+    // حافظه‌ی مرورگر در دسترس نیست؛ نشانه فقط در همین صفحه می‌ماند.
+  }
+}
+
+// اگر دور خودکار تازه‌ای انجام شده که هنوز در چت اعلام نشده، اعلامش می‌کنیم؛
+// اگر همان دور قبلاً اعلام شده باشد، دوباره اعلام نمی‌شود.
+function announceAutoRefresh(lastRefresh) {
+  if (!lastRefresh || !lastRefresh.at) {
+    return;
+  }
+  if (getAnnouncedAt() === lastRefresh.at) {
+    return;
+  }
+  setAnnouncedAt(lastRefresh.at);
+  addChatMessage(refreshChatMessage(lastRefresh, false));
+  announceClientMatches(lastRefresh.clientMatches);
 }
 
 // لیست آگهی‌ها، اعلان‌ها، وضعیت زمان‌بندی، مشتری‌ها و محله‌ها را از برنامه می‌گیرد و صفحه را تازه می‌کند.
@@ -410,6 +453,9 @@ async function load() {
       const status = await statusResponse.json();
       state.nextRunAt = status.nextRunAt;
       state.intervalMinutes = status.intervalMinutes ?? 30;
+      // اگر دور خودکار تازه‌ای انجام شده، در چت اعلامش می‌کنیم؛
+      // صفحه هر یک دقیقه این را می‌پرسد، پس دور خودکار حداکثر یک دقیقه بعد اعلام می‌شود.
+      announceAutoRefresh(status.lastRefresh);
     }
     if (clientsResponse.ok) {
       state.clients = await clientsResponse.json();
@@ -462,6 +508,10 @@ async function refresh() {
     }
     const result = await response.json();
     status.textContent = '';
+    // وقتش را نشانه می‌گذاریم تا `load()`ای که بلافاصله بعدش صدا می‌شود، همین دور را دوباره اعلام نکند.
+    if (result.at) {
+      setAnnouncedAt(result.at);
+    }
     addChatMessage(refreshChatMessage(result, true));
     announceClientMatches(result.clientMatches);
     await load();

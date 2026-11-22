@@ -89,8 +89,12 @@ export class ListingsService {
       fetchedBySource[post.source]++;
     }
     // آگهی‌های تازه را با مشتری‌های دفترچه جور می‌کنیم؛
+    // فقط آگهی‌هایی که همین دور تازه‌اند (واردشده یا قیمت‌عوض‌شده)، نه همه‌ی آگهی‌های گرفته‌شده؛
+    // وگرنه هر دور، تطابق‌های قدیمی هم دوباره در چت اعلام می‌شدند.
     // اگر آگهی تازه‌ای به درد مشتری‌ای خورد، در جواب می‌نویسیم تا چت وضعیت اعلام کند.
-    const clientMatches = await this.matchFreshWithClients(fresh);
+    const freshTokens = new Set(saved.freshTokens);
+    const newListings = fresh.filter((listing) => freshTokens.has(listing.token));
+    const clientMatches = await this.matchFreshWithClients(newListings);
     return {
       fetched: rawPosts.length,
       added: saved.added,
@@ -99,6 +103,8 @@ export class ListingsService {
       total: saved.total,
       fetchedBySource,
       addedBySource: saved.addedBySource,
+      // چند آگهی قدیمی قیمتشان عوض شد و تازه حساب شدند.
+      changedPrice: saved.priceChangedTokens.length,
       clientMatches,
     };
   }

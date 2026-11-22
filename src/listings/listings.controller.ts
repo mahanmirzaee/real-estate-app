@@ -105,7 +105,9 @@ export class ListingsController {
   @ApiResponse({ status: 201, description: 'چند آگهی گرفته شد، چند تا تازه اضافه شد، چند تا آژانس بود' })
   async refresh() {
     const result = await this.listingsService.refresh();
-    this.statusService.record(result);
+    // نتیجه را با وقتش ثبت می‌کنیم و همان نتیجه‌ی وقت‌دار را برمی‌گردانیم؛
+    // مرورگر با همین وقت می‌فهمد این دور را اعلام کرده است و دوباره اعلامش نمی‌کند.
+    const recorded = this.statusService.record(result);
     try {
       await this.schedulerService.reschedule();
     } catch (error) {
@@ -113,6 +115,6 @@ export class ListingsController {
         `تایمر تازه‌سازی از اول انداخته نشد: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    return result;
+    return recorded;
   }
 }

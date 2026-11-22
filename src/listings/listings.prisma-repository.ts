@@ -153,19 +153,38 @@ export class PrismaListingsRepository extends ListingsRepository {
     added: number;
     addedBySource: { divar: number; sheypoor: number };
     total: number;
+    freshTokens: string[];
+    priceChangedTokens: string[];
   }> {
     if (incoming.length === 0) {
       const total = await this.prisma.listing.count({ where: { isPersonal: true } });
-      return { added: 0, addedBySource: { divar: 0, sheypoor: 0 }, total };
+      return { added: 0, addedBySource: { divar: 0, sheypoor: 0 }, total, freshTokens: [], priceChangedTokens: [] };
     }
     // اول می‌پرسیم کدام شناسه‌ها از قبل در انبار هستند؛
     // فقط آگهی‌هایی که از قبل نیستند، «تازه» حساب می‌شوند و رویداد می‌گیرند.
+    // برای آگهی‌هایی که از قبل هستند، عددهای قیمت ذخیره‌شده را هم می‌خوانیم
+    // تا بفهمیم قیمتشان عوض شده است یا نه (تصمیم مشتری: آگهی قدیمی که قیمتش عوض شده، تازه حساب می‌شود).
     const existing = await this.prisma.listing.findMany({
       where: { token: { in: incoming.map((listing) => listing.token) } },
-      select: { token: true },
+      select: { token: true, rahnAmount: true, ejareAmount: true, saleAmount: true },
     });
+    const existingByToken = new Map(existing.map((row) => [row.token, row]));
     const existingTokens = new Set(existing.map((row) => row.token));
     const fresh = incoming.filter((listing) => !existingTokens.has(listing.token));
+    // آگهی قدیمی که قیمتش عوض شده است: یکی از عددهای قیمت تازه، غیر خالی است
+    // و با عدد ذخیره‌شده فرق می‌کند. عدد خالیِ تازه، جای عدد ذخیره‌شده را نمی‌گیرد
+    // و «تغییر» هم حساب نمی‌شود — چون قیمت خوانده نشده، نه عوض شده.
+    const priceChanged = incoming.filter((listing) => {
+      const stored = existingByToken.get(listing.token);
+      if (!stored) {
+        return false;
+      }
+      return (
+        (listing.rahnAmount !== null && listing.rahnAmount !== undefined && listing.rahnAmount !== stored.rahnAmount) ||
+        (listing.ejareAmount !== null && listing.ejareAmount !== undefined && listing.ejareAmount !== stored.ejareAmount) ||
+        (listing.saleAmount !== null && listing.saleAmount !== undefined && listing.saleAmount !== stored.saleAmount)
+      );
+    });
 
     const created = await this.prisma.$transaction(async (tx) => {
       // آگهی‌های تازه را می‌نویسیم؛ تکراری‌ها را دیتابیس خودش رد می‌کند.
@@ -193,6 +212,22 @@ export class PrismaListingsRepository extends ListingsRepository {
         })),
         skipDuplicates: true,
       });
+      // آگهی‌هایی که قیمتشان عوض شده است، قیمت تازه‌شان را می‌گیرند؛
+      // وگرنه دور بعد دوباره «تازه» حساب می‌شدند و هیچ‌وقت تمام نمی‌شد.
+      // فقط عددهای غیر خالیِ تازه نوشته می‌شوند؛ عدد خالی، جای عدد ذخیره‌شده را نمی‌گیرد.
+      for (const listing of priceChanged) {
+        const data: Record<string, unknown> = { priceText: listing.priceText };
+        if (listing.rahnAmount !== null && listing.rahnAmount !== undefined) {
+          data.rahnAmount = listing.rahnAmount;
+        }
+        if (listing.ejareAmount !== null && listing.ejareAmount !== undefined) {
+          data.ejareAmount = listing.ejareAmount;
+        }
+        if (listing.saleAmount !== null && listing.saleAmount !== undefined) {
+          data.saleAmount = listing.saleAmount;
+        }
+        await tx.listing.updateMany({ where: { token: listing.token }, data });
+      }
       // آگهی‌هایی که از قبل بودند ولی عکس نداشتند، حالا که دوباره دیده شدند،
       // عکسشان را می‌گیرند تا لیست قدیمی هم کم‌کم عکس‌دار شود.
       for (const listing of incoming) {
@@ -310,7 +345,14 @@ export class PrismaListingsRepository extends ListingsRepository {
     for (const listing of fresh) {
       addedBySource[listing.source]++;
     }
-    return { added: created.count, addedBySource, total };
+    // شناسه‌ی آگهی‌های تازه‌ی همین دور، به همان ترتیبی که آمدند:
+    // واردشده‌ها به‌علاوه‌ی قیمت‌عوض‌شده‌ها. سرویس فقط همین‌ها را با مشتری جور می‌کند.
+    const priceChangedTokens = priceChanged.map((listing) => listing.token);
+    const priceChangedSet = new Set(priceChangedTokens);
+    const freshTokens = incoming
+      .filter((listing) => !existingTokens.has(listing.token) || priceChangedSet.has(listing.token))
+      .map((listing) => listing.token);
+    return { added: created.count, addedBySource, total, freshTokens, priceChangedTokens };
   }
 
   // آگهی‌های مشاور را ذخیره می‌کند؛ فقط برای میانگین قیمت محله.
