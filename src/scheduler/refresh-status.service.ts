@@ -35,6 +35,8 @@ export interface RefreshResult {
   fetchedBySource: { divar: number; sheypoor: number };
   // از هر منبع چند آگهی تازه اضافه شد.
   addedBySource: { divar: number; sheypoor: number };
+  // چند آگهی قدیمی قیمتشان عوض شد و تازه حساب شدند؛ اگر نبود، خالی است.
+  changedPrice?: number;
   // آگهی‌های تازه‌ای که به درد مشتری‌های دفترچه می‌خورند؛ اگر مشتری‌ای نباشد، خالی است.
   clientMatches?: ClientMatch[];
 }
@@ -52,8 +54,10 @@ export class RefreshStatusService {
 
   // نتیجه‌ی یک دور تازه‌سازی را با وقتش ثبت می‌کند؛
   // هم دور خودکار (از کارگر) و هم دور دستی (از دکمه‌ی تازه‌سازی) اینجا ثبت می‌شوند.
-  record(result: RefreshResult): void {
+  // همان نتیجه‌ی وقت‌دار را برمی‌گرداند تا دکمه‌ی دستی بتواند وقتش را به مرورگر بدهد.
+  record(result: RefreshResult): LastRefresh {
     this.last = { ...result, at: new Date().toISOString() };
+    return this.last;
   }
 
   // آخرین تازه‌سازی را می‌دهد؛ اگر هنوز هیچ دوری انجام نشده، خالی است.

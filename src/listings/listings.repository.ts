@@ -27,11 +27,16 @@ export abstract class ListingsRepository {
 
   // آگهی‌های تازه را به انبار اضافه می‌کند، ولی تکراری‌ها را دوباره ذخیره نمی‌کند.
   // برمی‌گرداند چند تا تازه اضافه شد (`added`)، از هر منبع چند تا تازه آمد (`addedBySource`)
-  // و حالا در کل چند تا آگهی شخصی هست (`total`).
+  // و حالا در کل چند تا آگهی شخصی هست (`total`)؛
+  // به‌علاوه‌ی شناسه‌ی آگهی‌های تازه‌ی همین دور (`freshTokens`):
+  // آگهی‌هایی که همین دور اول بار دیده شدند، به‌علاوه‌ی آگهی‌های قدیمی که قیمتشان عوض شده است.
+  // `priceChangedTokens` فقط قیمت‌عوض‌شده‌ها را جدا می‌دهد.
   abstract upsert(incoming: Listing[]): Promise<{
     added: number;
     addedBySource: { divar: number; sheypoor: number };
     total: number;
+    freshTokens: string[];
+    priceChangedTokens: string[];
   }>;
 
   // آگهی‌های مشاور را ذخیره می‌کند؛ فقط برای میانگین قیمت محله.
